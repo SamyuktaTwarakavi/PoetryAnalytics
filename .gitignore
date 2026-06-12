@@ -21,14 +21,16 @@ Thumbs.db
 .vscode/
 *.swp
 
-# ---- Data inside the Code folder: keep ONLY the CSV corpora ----
-# ignores the unzipped PoeTree JSON dump (Code/data/poetree_en/) and stray *.json
+# ---- Data: keep ONLY the CSV corpora ----
+# ignores the PoeTree dump (Code/data/poetree_en/), the downloaded lexicons
+# (Code/data/lexicons/), stray *.json, etc.
 Code/data/*
-Code/data/*.csv
+!Code/data/.gitkeep
+!Code/data/*.csv
 
-# ---- Generated figures ----
+# ---- Generated figures (results_*.md and closeread.md stay tracked) ----
 Code/outputs/*.png
-Code/outputs/.gitkeep
+!Code/outputs/.gitkeep
 
 # ---- Downloaded archives ----
 *.zip

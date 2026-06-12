@@ -1,0 +1,33 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- OS / editors ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ---- Data: keep ONLY the CSV corpora ----
+# ignores the unzipped PoeTree JSON dump (data/poetree_en/), stray *.json, etc.
+data/*
+!data/.gitkeep
+!data/*.csv
+
+# ---- Generated figures (re-created when you run the study) ----
+outputs/*.png
+!outputs/.gitkeep
+
+# ---- Downloaded archives ----
+*.zip

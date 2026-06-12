@@ -9,17 +9,26 @@ For each poem we compute our score and the lexicon's average score over the
 poem's words, then correlate the two. A high correlation means our homemade
 ruler agrees with the experts and can be trusted.
 
-Get the lexicons (both free) and put them in data/lexicons/ :
-  - Brysbaert: search "Brysbaert concreteness ratings 40 thousand" (crr.ugent.be);
-    download the tab-separated file and save it as  data/lexicons/concreteness.txt
-  - NRC-VAD:   from Saif Mohammad's NRC-VAD page; save it as
-    data/lexicons/nrc_vad.txt   (word <tab> valence <tab> arousal <tab> dominance)
+Get the lexicons (both free for research) and put them in data/lexicons/ :
+
+  Brysbaert concreteness  ->  data/lexicons/concreteness.txt
+    Direct file (right-click "Save link as"):
+      https://raw.githubusercontent.com/ArtsEngine/concreteness/master/Concreteness_ratings_Brysbaert_et_al_BRM.txt
+    Repo page (has a .xlsx too): https://github.com/ArtsEngine/concreteness
+    Tab-separated; the value the loader uses is the "Conc.M" column.
+
+  NRC-VAD valence  ->  data/lexicons/nrc_vad.txt
+    Download the zip:  http://saifmohammad.com/WebDocs/Lexicons/NRC-VAD-Lexicon.zip
+    Unzip it, find  NRC-VAD-Lexicon.txt  inside, and save/rename it as
+      data/lexicons/nrc_vad.txt
+    Project page: https://saifmohammad.com/WebPages/nrc-vad.html
+    Tab-separated (Word, Valence, Arousal, Dominance); free for non-commercial
+    research use. The loader uses the "Valence" column.
 
 Run:  python validate.py
 If a file is missing it skips that check and tells you where to put it.
 """
 
-import csv
 import os
 import numpy as np
 import matplotlib
@@ -29,10 +38,7 @@ import matplotlib.pyplot as plt
 import config
 import poems_data as words
 from corpus import poems, era_order
-
-LEX_DIR = os.path.join(config.DATA_DIR, "lexicons")
-BRYSBAERT = os.path.join(LEX_DIR, "concreteness.txt")
-NRC_VAD = os.path.join(LEX_DIR, "nrc_vad.txt")
+from lexicons import load_concreteness, load_valence, poem_mean
 
 
 def polarity(text, high, low):
@@ -40,55 +46,6 @@ def polarity(text, high, low):
     h = sum(1 for x in w if x in high)
     l = sum(1 for x in w if x in low)
     return (h - l) / (h + l) if (h + l) else 0.0
-
-
-# ---- loading a word -> value lexicon, tolerant of format ----
-def sniff_delim(path):
-    with open(path, encoding="utf-8", errors="ignore") as f:
-        line = f.readline()
-    return "\t" if line.count("\t") >= line.count(",") else ","
-
-
-def load_lexicon(path, value_names, value_index):
-    """Return {word: float}, picking the value column by header name or position."""
-    delim = sniff_delim(path)
-    with open(path, encoding="utf-8", errors="ignore") as f:
-        rows = list(csv.reader(f, delimiter=delim))
-    if not rows:
-        return {}
-
-    # treat the first row as a header if its value cell isn't a number
-    header = rows[0]
-    has_header = True
-    try:
-        float(header[value_index])
-        has_header = False
-    except (ValueError, IndexError):
-        has_header = True
-
-    vi = value_index
-    if has_header:
-        names = {h.strip().lower(): i for i, h in enumerate(header)}
-        for cand in value_names:
-            if cand in names:
-                vi = names[cand]
-                break
-        rows = rows[1:]
-
-    out = {}
-    for row in rows:
-        if len(row) <= vi or not row or not row[0]:
-            continue
-        try:
-            out[row[0].strip().lower()] = float(row[vi])
-        except ValueError:
-            continue
-    return out
-
-
-def poem_mean(text, lex):
-    vals = [lex[w] for w in text.split() if w in lex]
-    return float(np.mean(vals)) if vals else None
 
 
 # ---- correlation + plotting ----
@@ -153,27 +110,25 @@ def check(name, our_high, our_low, lex, lex_label, plot_name):
 def main():
     results = []
 
-    if os.path.exists(BRYSBAERT):
-        print("concreteness vs Brysbaert:")
-        lex = load_lexicon(BRYSBAERT, ["conc.m", "concreteness", "conc"], 2)
-        print(f"  loaded {len(lex)} concreteness words")
-        r = check("concreteness", words.CONCRETE, words.ABSTRACT, lex,
+    conc = load_concreteness()
+    if conc is not None:
+        print(f"concreteness vs Brysbaert ({len(conc)} words):")
+        r = check("concreteness", words.CONCRETE, words.ABSTRACT, conc,
                   "Brysbaert concreteness", "validate_concreteness.png")
         if r:
             results.append(r)
     else:
-        print(f"skip concreteness -- put the Brysbaert file at {BRYSBAERT}")
+        print("skip concreteness -- put the Brysbaert file at data/lexicons/concreteness.txt")
 
-    if os.path.exists(NRC_VAD):
-        print("valence vs NRC-VAD:")
-        lex = load_lexicon(NRC_VAD, ["valence", "v"], 1)
-        print(f"  loaded {len(lex)} valence words")
-        r = check("valence", words.POSITIVE, words.NEGATIVE, lex,
+    val = load_valence()
+    if val is not None:
+        print(f"valence vs NRC-VAD ({len(val)} words):")
+        r = check("valence", words.POSITIVE, words.NEGATIVE, val,
                   "NRC-VAD valence", "validate_valence.png")
         if r:
             results.append(r)
     else:
-        print(f"skip valence -- put the NRC-VAD file at {NRC_VAD}")
+        print("skip valence -- put the NRC-VAD file at data/lexicons/nrc_vad.txt")
 
     if not results:
         print("\nNo lexicons found. See the instructions at the top of validate.py.")

@@ -26,7 +26,7 @@ are the interesting findings.
 
 ```bash
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ## Build the corpus
@@ -35,22 +35,30 @@ pip install -r requirements.txt
 # PoeTree -- the big, dated source
 # 1. download en.zip (~388 MB) from https://zenodo.org/records/10907309
 # 2. unzip it so the json files sit in  data/poetree_en/
-python peek.py             # (optional) confirm the dump's layout
-python fetch.py            # PoeTree dump  -> data/poetree.csv
+python3 peek.py             # (optional) confirm the dump's layout
+python3 fetch.py            # PoeTree dump  -> data/poetree.csv
 
 # PoetryDB -- adds more public-domain poems
-python fetch_poetrydb.py   # PoetryDB      -> data/poetrydb.csv
+python3 fetch_poetrydb.py   # PoetryDB      -> data/poetrydb.csv
 
 # merge the two, removing duplicates
-python combine.py          # -> data/poems.csv  (this is what the study reads)
+python3 combine.py          # -> data/poems.csv  (this is what the study reads)
 ```
 
 ## Run the study
 
 ```bash
-python test_textbook.py    # -> outputs/ figures + results_textbook.md
-python validate.py         # -> check the rulers vs lexicons (optional)
+python3 test_textbook.py    # -> outputs/ figures + results_textbook.md
+python3 validate.py         # -> check the rulers vs lexicons (optional)
+python3 closeread.py        # -> list the extreme poems per measure (optional)
 ```
+
+`test_textbook.py` writes to `outputs/`:
+- `textbook_claims.png` — one trend panel per claim, with the 95% band and verdict
+- `textbook_heatmap.png` — all five measures across the eras at a glance
+- `textbook_effects.png` — how big each shift was, coloured by verdict
+- `textbook_counts.png` — poems per era (where the data is thick or thin)
+- `results_textbook.md` — the scoreboard, per-era counts, and per-claim detail
 
 `validate.py` needs two free lexicon files in `data/lexicons/` (Brysbaert
 concreteness and NRC-VAD) -- see the header of `validate.py` for where to get them.
@@ -69,7 +77,9 @@ poetry/
 ├── fetch_poetrydb.py      # pull PoetryDB              -> poetrydb.csv
 ├── combine.py             # merge sources + dedupe     -> poems.csv
 ├── test_textbook.py       # THE study: claim verdicts, per-era CIs, figures
-└── validate.py            # check measures vs Brysbaert / NRC-VAD lexicons
+├── lexicons.py            # shared loader for the Brysbaert / NRC-VAD files
+├── validate.py            # check measures vs Brysbaert / NRC-VAD lexicons
+└── closeread.py           # list the highest/lowest poems per measure to read
 ```
 
 ## How it works
@@ -80,7 +90,9 @@ poetry/
 3. **test_textbook** scores every poem on a few theme measures (nature, sacred,
    industrial, concreteness, valence), averages per era with 95% confidence
    intervals from bootstrapping whole poets, and gives each textbook claim a
-   verdict: CONFIRMED, WEAKLY SUPPORTED, or CHALLENGED.
+   verdict: CONFIRMED, WEAKLY SUPPORTED, or CHALLENGED. If the lexicon files are
+   present, concreteness and valence are scored directly from Brysbaert/NRC-VAD
+   (smoother and validated); otherwise from the word lists.
 4. **validate** (optional) correlates the concreteness and valence measures with
    the published Brysbaert and NRC-VAD lexicons, to show the homemade rulers
    agree with the experts.
@@ -151,13 +163,19 @@ Each is a textbook claim → a measure → a predicted direction.
   that the numbers match what is on the page.
 
 ## What each figure shows
-- **Figure 1 — `textbook_claims.png`**: one panel per claim, showing the measure
-  across the eras with a shaded 95% band; the "before" era (gray line) and the
-  era the claim is about (red line) are marked, and the verdict is in the title.
-- **Figure 2 — `textbook_counts.png`**: poems per era, so a reader can see exactly
-  where the corpus is thick or thin before trusting any trend.
-- **Table — `results_textbook.md`**: a scoreboard of every claim with its
-  before/after values and verdict, followed by per-claim detail and CIs.
+- **`textbook_claims.png`**: one panel per claim, showing the measure across the
+  eras with a shaded 95% band; the "before" era (gray line) and the era the claim
+  is about (red line) are marked, and the verdict is in the title.
+- **`textbook_heatmap.png`**: all five measures across all eras in one grid, each
+  cell coloured by how high or low that measure is relative to its own average
+  (red = high, blue = low). The whole "shape of literary change" at a glance.
+- **`textbook_effects.png`**: one bar per claim showing how big the shift was from
+  the "before" era to the claim era (in standard deviations), coloured by verdict
+  (green = confirmed, orange = weakly supported, red = challenged).
+- **`textbook_counts.png`**: poems per era, so a reader can see exactly where the
+  corpus is thick or thin before trusting any trend.
+- **`results_textbook.md`**: a scoreboard of every claim with its before/after
+  values and verdict, how each measure was scored, and per-claim detail with CIs.
 
 ## Why it matters
 The confirmed claims show the method works; the **challenged** claims are the real
@@ -781,9 +799,16 @@ abstract<->concrete style score) per era, compare the era the claim is "about"
 with an earlier era, and report whether the prediction holds. Descriptive only:
 just counting and averaging, with bootstrap confidence intervals. No prediction.
 
+If the validation lexicons are present in data/lexicons/, concreteness and
+valence are scored straight from them (smoother, and validated against the
+experts); otherwise they fall back to the word lists. Nature, sacred, and
+industrial are always word-list rates (they have no lexicon equivalent).
+
 Run (after building data/poems.csv):  python test_textbook.py
 Outputs (in outputs/):
     textbook_claims.png    one panel per claim: the trend + 95% band
+    textbook_heatmap.png   all measures x eras at a glance (the shape of change)
+    textbook_effects.png   how big each shift was, and the verdict, in one chart
     textbook_counts.png    poems per era (shows where the data is thin)
     results_textbook.md    the numbers and a verdict for each claim
 """
@@ -797,6 +822,7 @@ import matplotlib.pyplot as plt
 import config
 import poems_data as words
 from corpus import poems, era_order
+from lexicons import load_concreteness, load_valence, poem_mean
 
 START_YEAR = 1600     # ignore the sparse, Middle-English bins before this
 N_BOOTSTRAP = 500
@@ -871,17 +897,44 @@ def main():
     by_era = {e: [p for p in kept if p["era"] == e] for e in eras}
     counts = {e: len(by_era[e]) for e in eras}
 
+    # If the lexicons are in data/lexicons/, score concreteness and valence
+    # straight from them (smoother + validated); else fall back to word lists.
+    conc_lex = load_concreteness()
+    val_lex = load_valence()
+    scoring = {
+        "nature": "word-list rate (% nature words)",
+        "industrial": "word-list rate (% industrial words)",
+        "sacred": "word-list rate (% religious words)",
+        "concreteness": "Brysbaert lexicon (mean)" if conc_lex else "word list (concrete - abstract)",
+        "valence": "NRC-VAD lexicon (mean)" if val_lex else "word list (positive - negative)",
+    }
+
+    def score(text, name):
+        if name == "concreteness" and conc_lex:
+            return poem_mean(text, conc_lex)
+        if name == "valence" and val_lex:
+            return poem_mean(text, val_lex)
+        return measure_poem(text, name)
+
     needed = {c["measure"] for c in CLAIMS}
     for p in kept:
         for m in needed:
-            p[m] = measure_poem(p["text"], m)
+            p[m] = score(p["text"], m)
+    for m in sorted(needed):
+        print(f"  {m}: {scoring[m]}")
 
-    # per-era mean + bootstrap CI (resample whole poets, not poems)
+    # per-era mean + bootstrap CI (resample whole poets, not poems).
+    # poems with no lexicon words score None and are skipped for that measure.
     def era_stats(measure):
         means, los, his = [], [], []
         for e in eras:
-            group = by_era[e]
-            vals = np.array([p[measure] for p in group])
+            group = [p for p in by_era[e] if p.get(measure) is not None]
+            vals = np.array([p[measure] for p in group], dtype=float)
+            if len(vals) == 0:
+                means.append(float("nan"))
+                los.append(float("nan"))
+                his.append(float("nan"))
+                continue
             means.append(float(vals.mean()))
             poets = {}
             for i, p in enumerate(group):
@@ -915,9 +968,11 @@ def main():
                         "verdict": verdict})
         print(f"  {c['name']}: {verdict}")
 
-    plot_claims(eras, stats, results)
+    plot_claims(eras, stats, results, scoring)
+    plot_heatmap(eras, stats)
+    plot_effects(eras, stats, results)
     plot_counts(eras, counts)
-    write_report(eras, counts, results)
+    write_report(eras, counts, results, scoring)
 
 
 def _save(fig, name):
@@ -927,7 +982,7 @@ def _save(fig, name):
     print("saved", os.path.join("outputs", name))
 
 
-def plot_claims(eras, stats, results):
+def plot_claims(eras, stats, results, scoring):
     n = len(results)
     rows = (n + 1) // 2
     fig, axes = plt.subplots(rows, 2, figsize=(12, 4 * rows))
@@ -941,6 +996,7 @@ def plot_claims(eras, stats, results):
         ax.axvline(eras.index(r["eb"]), color="gray", ls="--", lw=1.5)
         ax.axvline(eras.index(r["ea"]), color="tab:red", ls="--", lw=1.5)
         ax.set_title(f"{r['name']}  --  {r['verdict']}", fontsize=11)
+        ax.set_ylabel(f"{r['measure']}\n({scoring[r['measure']]})", fontsize=8)
         ax.set_xticks(list(x))
         ax.set_xticklabels(eras, rotation=60, fontsize=7, ha="right")
         ax.grid(alpha=0.3)
@@ -950,6 +1006,57 @@ def plot_claims(eras, stats, results):
                  "(gray = 'before' era, red = the era the claim is about)", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     _save(fig, "textbook_claims.png")
+
+
+def _zscore(means):
+    mu, sd = np.nanmean(means), np.nanstd(means)
+    return (means - mu) / sd if sd > 0 else means * 0.0
+
+
+def plot_heatmap(eras, stats):
+    # one row per measure, one column per era; colour = how high/low that
+    # measure is relative to its own average (in standard deviations).
+    measures = ["nature", "sacred", "industrial", "concreteness", "valence"]
+    grid = np.array([_zscore(stats[m][0]) for m in measures])
+    fig, ax = plt.subplots(figsize=(12, 3.6))
+    im = ax.imshow(grid, aspect="auto", cmap="RdBu_r", vmin=-2, vmax=2)
+    ax.set_xticks(range(len(eras)))
+    ax.set_xticklabels(eras, rotation=60, fontsize=7, ha="right")
+    ax.set_yticks(range(len(measures)))
+    ax.set_yticklabels(measures)
+    fig.colorbar(im, ax=ax, label="standard deviations from\nthe measure's own average")
+    ax.set_title("The shape of literary change: every measure across the eras\n"
+                 "(red = high for that measure, blue = low)")
+    fig.tight_layout()
+    _save(fig, "textbook_heatmap.png")
+
+
+def plot_effects(eras, stats, results):
+    # one bar per claim: the standardized change from the 'before' era to the
+    # claim era, coloured by verdict. Lets you compare shifts across measures.
+    colour = {"CONFIRMED": "tab:green", "WEAKLY SUPPORTED": "tab:orange",
+              "CHALLENGED": "tab:red"}
+    names, effects, colours = [], [], []
+    for r in results:
+        z = _zscore(stats[r["measure"]][0])
+        ib, ia = eras.index(r["eb"]), eras.index(r["ea"])
+        names.append(r["name"])
+        effects.append(float(z[ia] - z[ib]))
+        colours.append(colour[r["verdict"]])
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    y = range(len(names))
+    ax.barh(list(y), effects, color=colours)
+    ax.axvline(0, color="black", lw=0.8)
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(names)
+    ax.invert_yaxis()
+    ax.set_xlabel("shift from the 'before' era to the claim era "
+                  "(in the measure's own standard deviations)")
+    ax.set_title("How big was each shift, and did the claim hold?\n"
+                 "green = confirmed, orange = weakly supported, red = challenged")
+    ax.grid(axis="x", alpha=0.3)
+    fig.tight_layout()
+    _save(fig, "textbook_effects.png")
 
 
 def plot_counts(eras, counts):
@@ -962,11 +1069,18 @@ def plot_counts(eras, counts):
     _save(fig, "textbook_counts.png")
 
 
-def write_report(eras, counts, results):
+def write_report(eras, counts, results, scoring):
     L = ["# Test the Textbook -- results\n"]
     L.append(f"Corpus: {sum(counts.values())} poems across {len(eras)} eras "
              f"({eras[0]} to {eras[-1]}). Eras before {START_YEAR} were excluded "
              f"(too few poems, Middle English).\n")
+
+    L.append("## How each measure was scored\n")
+    L.append("| measure | scored from |")
+    L.append("|---|---|")
+    for m in ["nature", "sacred", "industrial", "concreteness", "valence"]:
+        L.append(f"| {m} | {scoring[m]} |")
+    L.append("")
 
     L.append("## Scoreboard\n")
     L.append("| claim | measure | before | after | verdict |")
@@ -1003,55 +1117,32 @@ if __name__ == "__main__":
     main()
 ```
 
-## validate.py
+## lexicons.py
 
 ```python
 """
-Validate the rulers -- do our word-list measures agree with the experts?
+Load a "word -> number" lexicon and score a poem by its average value.
 
-We check two of our measures against published psycholinguistic lexicons:
-    concreteness  vs  Brysbaert concreteness norms (~40k words)
-    valence       vs  NRC-VAD valence lexicon (~20k words)
+Tolerant of tab- or comma-separated files and of an optional header row; the
+value column is found by name (e.g. "Conc.M", "Valence") or by position. Shared
+by validate.py (to check our rulers) and test_textbook.py (to optionally score
+concreteness and valence straight from the lexicon).
 
-For each poem we compute our score and the lexicon's average score over the
-poem's words, then correlate the two. A high correlation means our homemade
-ruler agrees with the experts and can be trusted.
-
-Get the lexicons (both free) and put them in data/lexicons/ :
-  - Brysbaert: search "Brysbaert concreteness ratings 40 thousand" (crr.ugent.be);
-    download the tab-separated file and save it as  data/lexicons/concreteness.txt
-  - NRC-VAD:   from Saif Mohammad's NRC-VAD page; save it as
-    data/lexicons/nrc_vad.txt   (word <tab> valence <tab> arousal <tab> dominance)
-
-Run:  python validate.py
-If a file is missing it skips that check and tells you where to put it.
+Put the files in data/lexicons/ -- see the header of validate.py for the links.
 """
 
 import csv
 import os
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 import config
-import poems_data as words
-from corpus import poems, era_order
 
 LEX_DIR = os.path.join(config.DATA_DIR, "lexicons")
 BRYSBAERT = os.path.join(LEX_DIR, "concreteness.txt")
 NRC_VAD = os.path.join(LEX_DIR, "nrc_vad.txt")
 
 
-def polarity(text, high, low):
-    w = text.split()
-    h = sum(1 for x in w if x in high)
-    l = sum(1 for x in w if x in low)
-    return (h - l) / (h + l) if (h + l) else 0.0
-
-
-# ---- loading a word -> value lexicon, tolerant of format ----
-def sniff_delim(path):
+def _sniff_delim(path):
     with open(path, encoding="utf-8", errors="ignore") as f:
         line = f.readline()
     return "\t" if line.count("\t") >= line.count(",") else ","
@@ -1059,7 +1150,7 @@ def sniff_delim(path):
 
 def load_lexicon(path, value_names, value_index):
     """Return {word: float}, picking the value column by header name or position."""
-    delim = sniff_delim(path)
+    delim = _sniff_delim(path)
     with open(path, encoding="utf-8", errors="ignore") as f:
         rows = list(csv.reader(f, delimiter=delim))
     if not rows:
@@ -1095,8 +1186,76 @@ def load_lexicon(path, value_names, value_index):
 
 
 def poem_mean(text, lex):
+    """Average lexicon value over the poem's words, or None if none are covered."""
     vals = [lex[w] for w in text.split() if w in lex]
     return float(np.mean(vals)) if vals else None
+
+
+def load_concreteness():
+    """Brysbaert concreteness, or None if the file isn't in data/lexicons/."""
+    if os.path.exists(BRYSBAERT):
+        return load_lexicon(BRYSBAERT, ["conc.m", "concreteness", "conc"], 2)
+    return None
+
+
+def load_valence():
+    """NRC-VAD valence, or None if the file isn't in data/lexicons/."""
+    if os.path.exists(NRC_VAD):
+        return load_lexicon(NRC_VAD, ["valence", "v"], 1)
+    return None
+```
+
+## validate.py
+
+```python
+"""
+Validate the rulers -- do our word-list measures agree with the experts?
+
+We check two of our measures against published psycholinguistic lexicons:
+    concreteness  vs  Brysbaert concreteness norms (~40k words)
+    valence       vs  NRC-VAD valence lexicon (~20k words)
+
+For each poem we compute our score and the lexicon's average score over the
+poem's words, then correlate the two. A high correlation means our homemade
+ruler agrees with the experts and can be trusted.
+
+Get the lexicons (both free for research) and put them in data/lexicons/ :
+
+  Brysbaert concreteness  ->  data/lexicons/concreteness.txt
+    Direct file (right-click "Save link as"):
+      https://raw.githubusercontent.com/ArtsEngine/concreteness/master/Concreteness_ratings_Brysbaert_et_al_BRM.txt
+    Repo page (has a .xlsx too): https://github.com/ArtsEngine/concreteness
+    Tab-separated; the value the loader uses is the "Conc.M" column.
+
+  NRC-VAD valence  ->  data/lexicons/nrc_vad.txt
+    Download the zip:  http://saifmohammad.com/WebDocs/Lexicons/NRC-VAD-Lexicon.zip
+    Unzip it, find  NRC-VAD-Lexicon.txt  inside, and save/rename it as
+      data/lexicons/nrc_vad.txt
+    Project page: https://saifmohammad.com/WebPages/nrc-vad.html
+    Tab-separated (Word, Valence, Arousal, Dominance); free for non-commercial
+    research use. The loader uses the "Valence" column.
+
+Run:  python validate.py
+If a file is missing it skips that check and tells you where to put it.
+"""
+
+import os
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+import config
+import poems_data as words
+from corpus import poems, era_order
+from lexicons import load_concreteness, load_valence, poem_mean
+
+
+def polarity(text, high, low):
+    w = text.split()
+    h = sum(1 for x in w if x in high)
+    l = sum(1 for x in w if x in low)
+    return (h - l) / (h + l) if (h + l) else 0.0
 
 
 # ---- correlation + plotting ----
@@ -1161,27 +1320,25 @@ def check(name, our_high, our_low, lex, lex_label, plot_name):
 def main():
     results = []
 
-    if os.path.exists(BRYSBAERT):
-        print("concreteness vs Brysbaert:")
-        lex = load_lexicon(BRYSBAERT, ["conc.m", "concreteness", "conc"], 2)
-        print(f"  loaded {len(lex)} concreteness words")
-        r = check("concreteness", words.CONCRETE, words.ABSTRACT, lex,
+    conc = load_concreteness()
+    if conc is not None:
+        print(f"concreteness vs Brysbaert ({len(conc)} words):")
+        r = check("concreteness", words.CONCRETE, words.ABSTRACT, conc,
                   "Brysbaert concreteness", "validate_concreteness.png")
         if r:
             results.append(r)
     else:
-        print(f"skip concreteness -- put the Brysbaert file at {BRYSBAERT}")
+        print("skip concreteness -- put the Brysbaert file at data/lexicons/concreteness.txt")
 
-    if os.path.exists(NRC_VAD):
-        print("valence vs NRC-VAD:")
-        lex = load_lexicon(NRC_VAD, ["valence", "v"], 1)
-        print(f"  loaded {len(lex)} valence words")
-        r = check("valence", words.POSITIVE, words.NEGATIVE, lex,
+    val = load_valence()
+    if val is not None:
+        print(f"valence vs NRC-VAD ({len(val)} words):")
+        r = check("valence", words.POSITIVE, words.NEGATIVE, val,
                   "NRC-VAD valence", "validate_valence.png")
         if r:
             results.append(r)
     else:
-        print(f"skip valence -- put the NRC-VAD file at {NRC_VAD}")
+        print("skip valence -- put the NRC-VAD file at data/lexicons/nrc_vad.txt")
 
     if not results:
         print("\nNo lexicons found. See the instructions at the top of validate.py.")
@@ -1201,6 +1358,102 @@ def main():
             f.write(f"| {r['measure']} | {r['lexicon']} | {r['r_poem']:.2f} "
                     f"| {r['r_era']:.2f} | {r['n']} |\n")
     print("saved", os.path.join("outputs", "results_validation.md"))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+## closeread.py
+
+```python
+"""
+Close reading -- the poems at each extreme.
+
+For every measure, list the highest- and lowest-scoring poems (author, era,
+score, and the opening words) so you can check that the numbers match what is
+on the page. If the most-concrete poems really are full of physical images and
+the least are all abstractions, the measure means something.
+
+Uses the same scoring as test_textbook.py: the lexicons if they are in
+data/lexicons/, otherwise the word lists.
+
+Run:  python closeread.py
+Writes outputs/closeread.md and prints a short version to the screen.
+"""
+
+import os
+
+import config
+from corpus import poems
+from test_textbook import measure_poem
+from lexicons import load_concreteness, load_valence, poem_mean
+
+TOP_N = 5
+MIN_WORDS = 40          # skip very short poems -- their rates swing wildly
+MEASURES = ["nature", "sacred", "industrial", "concreteness", "valence"]
+
+
+def snippet(text, n=24):
+    w = text.split()
+    return " ".join(w[:n]) + (" ..." if len(w) > n else "")
+
+
+def line(score, p):
+    return (f"- **{score:.3f}**  {p['poet']}  ({p['era']})  \n"
+            f"  > {snippet(p['text'])}")
+
+
+def main():
+    conc_lex = load_concreteness()
+    val_lex = load_valence()
+    scoring = {
+        "nature": "word-list rate (% nature words)",
+        "sacred": "word-list rate (% religious words)",
+        "industrial": "word-list rate (% industrial words)",
+        "concreteness": "Brysbaert lexicon (mean)" if conc_lex else "word list (concrete - abstract)",
+        "valence": "NRC-VAD lexicon (mean)" if val_lex else "word list (positive - negative)",
+    }
+
+    def score(text, name):
+        if name == "concreteness" and conc_lex:
+            return poem_mean(text, conc_lex)
+        if name == "valence" and val_lex:
+            return poem_mean(text, val_lex)
+        return measure_poem(text, name)
+
+    long_poems = [p for p in poems if len(p["text"].split()) >= MIN_WORDS]
+    print(f"ranking {len(long_poems)} poems (>= {MIN_WORDS} words) of {len(poems)} total")
+
+    out = ["# Close reading: the poems at each extreme\n"]
+    out.append(f"For each measure, the {TOP_N} highest- and lowest-scoring poems "
+               f"(length >= {MIN_WORDS} words). The text shown is the cleaned, "
+               f"lowercased version used for scoring -- look up the original to "
+               f"read it properly.\n")
+
+    for m in MEASURES:
+        scored = [(score(p["text"], m), p) for p in long_poems]
+        scored = [(s, p) for s, p in scored if s is not None]
+        scored.sort(key=lambda sp: sp[0])
+        low = scored[:TOP_N]
+        high = scored[-TOP_N:][::-1]
+
+        out.append(f"## {m}  ({scoring[m]})\n")
+        out.append(f"### Highest {m}\n")
+        out += [line(s, p) for s, p in high]
+        out.append(f"\n### Lowest {m}\n")
+        out += [line(s, p) for s, p in low]
+        out.append("")
+
+        print(f"\n{m}  ({scoring[m]})")
+        print("  highest: " + ", ".join(f"{p['poet']} {s:.2f}" for s, p in high))
+        print("  lowest:  " + ", ".join(f"{p['poet']} {s:.2f}" for s, p in low))
+
+    os.makedirs(config.OUTPUT_DIR, exist_ok=True)
+    path = os.path.join(config.OUTPUT_DIR, "closeread.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(out))
+    print("\nsaved", os.path.join("outputs", "closeread.md"))
 
 
 if __name__ == "__main__":

@@ -43,13 +43,19 @@ Each is a textbook claim → a measure → a predicted direction.
   that the numbers match what is on the page.
 
 ## What each figure shows
-- **Figure 1 — `textbook_claims.png`**: one panel per claim, showing the measure
-  across the eras with a shaded 95% band; the "before" era (gray line) and the
-  era the claim is about (red line) are marked, and the verdict is in the title.
-- **Figure 2 — `textbook_counts.png`**: poems per era, so a reader can see exactly
-  where the corpus is thick or thin before trusting any trend.
-- **Table — `results_textbook.md`**: a scoreboard of every claim with its
-  before/after values and verdict, followed by per-claim detail and CIs.
+- **`textbook_claims.png`**: one panel per claim, showing the measure across the
+  eras with a shaded 95% band; the "before" era (gray line) and the era the claim
+  is about (red line) are marked, and the verdict is in the title.
+- **`textbook_heatmap.png`**: all five measures across all eras in one grid, each
+  cell coloured by how high or low that measure is relative to its own average
+  (red = high, blue = low). The whole "shape of literary change" at a glance.
+- **`textbook_effects.png`**: one bar per claim showing how big the shift was from
+  the "before" era to the claim era (in standard deviations), coloured by verdict
+  (green = confirmed, orange = weakly supported, red = challenged).
+- **`textbook_counts.png`**: poems per era, so a reader can see exactly where the
+  corpus is thick or thin before trusting any trend.
+- **`results_textbook.md`**: a scoreboard of every claim with its before/after
+  values and verdict, how each measure was scored, and per-claim detail with CIs.
 
 ## Why it matters
 The confirmed claims show the method works; the **challenged** claims are the real
