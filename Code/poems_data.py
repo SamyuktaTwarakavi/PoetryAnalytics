@@ -1,4 +1,4 @@
-# poems_data.py -- the data: word lists, dimension seeds, poet-year table.
+# poems_data.py -- the data: word lists and the poet-year table.
 
 
 # Word lists for step 2 (word-count dimensions).
@@ -22,18 +22,6 @@ INDUSTRIAL = ["iron", "engine", "steam", "smoke", "machine", "wheel", "grooves",
               "city", "factory", "coal"]
 RELIGIOUS = ["god", "gods", "soul", "heaven", "sacred", "holy", "prayer", "sin",
              "eternal", "divine", "hallowed", "blest", "immortal", "spirit"]
-
-# Seed pairs for step 3 (learned dimensions). Each is (high, low).
-DIMENSION_SEEDS = {
-    "valence": [("joy", "sorrow"), ("love", "hate"), ("sweet", "bitter"),
-                ("bright", "dark"), ("light", "cold"), ("beauty", "death")],
-    "concreteness": [("stone", "truth"), ("hand", "mind"), ("iron", "soul"),
-                     ("sea", "vision"), ("sand", "wonder"), ("moon", "change")],
-    "nature_vs_machine": [("tree", "engine"), ("river", "iron"),
-                          ("flower", "smoke"), ("bird", "wheel")],
-    "sacred_vs_worldly": [("god", "gold"), ("heaven", "earth"),
-                          ("soul", "flesh"), ("sacred", "world")],
-}
 
 
 # Poet -> rough active year, used to date PoetryDB poems (which carry no date).

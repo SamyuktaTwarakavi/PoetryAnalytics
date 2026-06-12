@@ -50,7 +50,7 @@ def find_author(key, authors):
 
 def get(url):
     req = urllib.request.Request(urllib.parse.quote(url, safe=":/?&=,;"),
-                                 headers={"User-Agent": "poetry-drift/1.0"})
+                                 headers={"User-Agent": "poetry-study/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=30, context=SSL) as resp:
             return json.loads(resp.read().decode("utf-8"))
