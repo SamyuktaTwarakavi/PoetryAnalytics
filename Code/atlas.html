@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Poet Atlas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<!-- if atlas_data.js sits beside this file, it loads your real data: -->
+<script src="atlas_data.js" onerror="void 0"></script>
+<style>
+  :root{
+    --paper:#f4f2ec; --panel:#fbfaf6; --ink:#20242e; --soft:#6b6f7a;
+    --line:#ddd8cc; --blue:#2f4858; --gilt:#b3892f;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;line-height:1.4}
+  header{padding:26px 30px 14px}
+  h1{font-family:var(--serif);font-weight:600;font-size:30px;margin:0;letter-spacing:.2px}
+  .sub{color:var(--soft);font-size:14px;margin-top:4px;max-width:60ch}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--soft);margin-top:8px}
+  .badge{display:none;background:var(--gilt);color:#fff;border-radius:3px;
+         padding:2px 7px;font-family:var(--sans);font-size:11px;font-weight:600;margin-left:8px}
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;
+            padding:6px 30px 18px;border-bottom:1px solid var(--line)}
+  .ctl{display:flex;flex-direction:column;gap:4px}
+  .ctl label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
+  select,.filebtn{font-family:var(--sans);font-size:14px;padding:6px 9px;border:1px solid var(--line);
+          background:var(--panel);border-radius:5px;color:var(--ink);cursor:pointer}
+  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .toggle button{font-family:var(--sans);font-size:13px;padding:6px 12px;border:0;background:var(--panel);
+          color:var(--soft);cursor:pointer}
+  .toggle button.on{background:var(--blue);color:#fff}
+  .filebtn{position:relative;overflow:hidden}
+  .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  main{display:grid;grid-template-columns:1fr 360px;gap:22px;padding:22px 30px 36px}
+  @media (max-width:860px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .card h2{font-family:var(--serif);font-size:16px;font-weight:600;margin:2px 0 10px}
+  .scatter svg, .radar svg{width:100%;height:auto;display:block}
+  .axis path,.axis line{stroke:#cfc9ba}
+  .axis text{fill:var(--soft);font-family:var(--mono);font-size:11px}
+  .axis-title{fill:var(--ink);font-family:var(--sans);font-size:12px;font-weight:600}
+  .dot{stroke:#fff;stroke-width:.6;cursor:pointer}
+  .dot.dim{opacity:.18}
+  .legend text{fill:var(--soft);font-family:var(--mono);font-size:10px}
+  .tip{position:fixed;pointer-events:none;background:var(--ink);color:#f4f2ec;border-radius:6px;
+       padding:8px 10px;font-size:12px;opacity:0;transition:opacity .08s;max-width:240px;z-index:9}
+  .tip b{font-family:var(--serif);font-weight:600}
+  .tip .row{font-family:var(--mono);font-size:11px;color:#cdd2c9;display:flex;justify-content:space-between;gap:14px}
+  .who{font-family:var(--serif);font-size:17px;margin:0}
+  .whometa{font-family:var(--mono);font-size:11px;color:var(--soft);margin:2px 0 8px}
+  .vals{list-style:none;padding:0;margin:8px 0 0}
+  .vals li{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;
+           padding:3px 0;border-bottom:1px dotted var(--line)}
+  .vals li span:last-child{color:var(--blue)}
+  .hint{color:var(--soft);font-size:13px;font-style:italic}
+  .rlabel{font-family:var(--sans);font-size:11px;fill:var(--ink)}
+</style>
+</head>
+<body>
+<header>
+  <h1>The Poet Atlas <span class="badge" id="badge">sample data</span></h1>
+  <div class="sub">Every author mapped across the five aspects of their verse. Choose what the axes
+    measure, then hover a point to see that poet's fingerprint across all five.</div>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="controls">
+  <div class="ctl"><label for="x">Horizontal axis</label><select id="x"></select></div>
+  <div class="ctl"><label for="y">Vertical axis</label><select id="y"></select></div>
+  <div class="ctl"><label>Show</label>
+    <div class="toggle" id="layer">
+      <button data-l="authors" class="on">Authors</button>
+      <button data-l="poems">Poems</button>
+    </div>
+  </div>
+  <div class="ctl"><label>Your data</label>
+    <span class="filebtn">Load atlas.json<input type="file" id="file" accept=".json,.js"></span>
+  </div>
+</div>
+
+<main>
+  <div class="card scatter">
+    <h2 id="scatterTitle">Authors</h2>
+    <div id="plot"></div>
+    <div id="legend"></div>
+  </div>
+  <div class="card radar">
+    <h2>Poet fingerprint</h2>
+    <p class="who" id="who">—</p>
+    <div class="whometa" id="whoMeta">Hover or click a point</div>
+    <div id="radar"></div>
+    <ul class="vals" id="vals"></ul>
+    <p class="hint" id="hint">The dotted shape is the corpus average.</p>
+  </div>
+</main>
+
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+const PRETTY = {year:"Year", nature:"Nature", sacred:"Sacred", industrial:"Industrial",
+                concreteness:"Concreteness", valence:"Valence"};
+const pretty = k => PRETTY[k] || k;
+const ERA_RAMP = d3.interpolateRgbBasis(["#2b3a67","#3f8f8a","#c79a3e"]);
+
+// ---- sample data (used only if your atlas_data.js isn't loaded) ----
+function makeSample(){
+  let s = 7;
+  const rnd = () => (s = (s*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const up = t => Math.max(0, t);
+  const authors = [];
+  for(let i=0;i<55;i++){
+    const year = 1588 + Math.floor(rnd()*338);     // 1588..1925
+    const t = (year-1588)/338;                      // 0..1 over time
+    const z = () => (rnd()-0.5);
+    authors.push({
+      poet: "Sample poet "+(i+1), year, n: 5+Math.floor(rnd()*140),
+      nature:      clamp(0.30 + 0.9*up(t-0.45) + 0.12*z(), 0, 1.5),
+      sacred:      clamp(0.70 - 0.55*up(t-0.55) + 0.12*z(), 0, 1.2),
+      industrial:  clamp(0.02 + 0.12*up(t-0.70) + 0.02*z(), 0, 0.2),
+      concreteness:clamp(2.50 + 0.18*t + 0.04*z(), 2.3, 2.85),
+      valence:     clamp(0.595 - 0.02*up(t-0.85) + 0.008*z(), 0.55, 0.63)
+    });
+  }
+  authors.sort((a,b)=>a.year-b.year);
+  return {measures:["nature","sacred","industrial","concreteness","valence"],
+          authors, poems:[], scoring:{concreteness:"sample",valence:"sample"}, sample:true};
+}
+
+let DATA = (window.ATLAS && window.ATLAS.authors && window.ATLAS.authors.length)
+            ? window.ATLAS : makeSample();
+const state = {x:"year", y:"concreteness", layer:"authors", pinned:null};
+let color, norm = {};
+
+const tip = d3.select("#tip");
+
+function setup(){
+  // dropdowns
+  const opts = ["year", ...DATA.measures];
+  for(const id of ["x","y"]){
+    const sel = d3.select("#"+id);
+    sel.selectAll("option").data(opts).join("option")
+       .attr("value", d=>d).text(d=>pretty(d));
+    sel.property("value", state[id]);
+    sel.on("change", function(){ state[id]=this.value; drawScatter(); });
+  }
+  // layer toggle (disable Poems if none)
+  const hasPoems = DATA.poems && DATA.poems.length;
+  d3.selectAll("#layer button").classed("disabled", false).each(function(){
+    const b = d3.select(this), l = b.attr("data-l");
+    if(l==="poems" && !hasPoems){ b.property("disabled",true).style("opacity",.4).style("cursor","not-allowed"); }
+    b.on("click", ()=>{ if(l==="poems" && !hasPoems) return;
+       state.layer=l; d3.selectAll("#layer button").classed("on",false);
+       b.classed("on",true); d3.select("#scatterTitle").text(l==="poems"?"Poems":"Authors");
+       drawScatter(); });
+  });
+  // colour + radar normalisation from authors
+  const yrs = d3.extent(DATA.authors, d=>d.year);
+  color = d3.scaleSequential(ERA_RAMP).domain(yrs);
+  norm = {};
+  for(const m of DATA.measures){
+    const ext = d3.extent(DATA.authors, d=>d[m]);
+    norm[m] = v => (ext[1]>ext[0]) ? (v-ext[0])/(ext[1]-ext[0]) : 0.5;
+  }
+  // meta + badge
+  d3.select("#badge").style("display", DATA.sample ? "inline-block" : "none");
+  const sc = DATA.scoring||{};
+  d3.select("#meta").text(
+    `${DATA.authors.length} authors · ${DATA.poems?DATA.poems.length:0} sampled poems · `
+    + `concreteness: ${sc.concreteness||"?"} · valence: ${sc.valence||"?"}`
+    + (DATA.sample ? "  —  run export_viz.py and load atlas.json for your poets" : ""));
+
+  drawScatter();
+  drawLegend();
+  drawRadar(null);
+}
+
+function accessor(k){ return d => k==="year" ? d.year : d[k]; }
+
+function drawScatter(){
+  const host = document.getElementById("plot");
+  const W = Math.max(320, host.clientWidth), H = 520;
+  const m = {top:14, right:16, bottom:46, left:58};
+  const rows = (state.layer==="poems" && DATA.poems.length) ? DATA.poems : DATA.authors;
+  const fx = accessor(state.x), fy = accessor(state.y);
+
+  const x = d3.scaleLinear().domain(pad(d3.extent(rows,fx))).range([m.left, W-m.right]).nice();
+  const y = d3.scaleLinear().domain(pad(d3.extent(rows,fy))).range([H-m.bottom, m.top]).nice();
+  const rmax = d3.max(DATA.authors, d=>d.n)||1;
+  const r = d3.scaleSqrt().domain([1, rmax]).range([3, 20]);
+
+  let svg = d3.select("#plot").selectAll("svg").data([0]);
+  svg = svg.join(enter => enter.append("svg")).attr("viewBox",`0 0 ${W} ${H}`).attr("width","100%");
+  svg.selectAll("*").remove();
+
+  svg.append("g").attr("class","axis").attr("transform",`translate(0,${H-m.bottom})`)
+     .call(d3.axisBottom(x).ticks(7));
+  svg.append("g").attr("class","axis").attr("transform",`translate(${m.left},0)`)
+     .call(d3.axisLeft(y).ticks(7));
+  svg.append("text").attr("class","axis-title").attr("text-anchor","middle")
+     .attr("x",(m.left+W-m.right)/2).attr("y",H-8).text(pretty(state.x));
+  svg.append("text").attr("class","axis-title").attr("text-anchor","middle")
+     .attr("transform",`translate(16,${(m.top+H-m.bottom)/2}) rotate(-90)`).text(pretty(state.y));
+
+  svg.append("g").selectAll("circle").data(rows).join("circle")
+     .attr("class","dot")
+     .attr("cx",d=>x(fx(d))).attr("cy",d=>y(fy(d)))
+     .attr("r",d=> state.layer==="poems" ? 3 : r(d.n))
+     .attr("fill",d=>color(d.year))
+     .attr("opacity", state.layer==="poems" ? 0.5 : 0.9)
+     .on("pointermove",(e,d)=>showTip(e,d))
+     .on("pointerover",(e,d)=>{ if(state.layer==="authors" && !state.pinned) drawRadar(d); })
+     .on("pointerout",()=>{ hideTip(); })
+     .on("click",(e,d)=>{ if(state.layer!=="authors") return;
+        state.pinned = (state.pinned===d)?null:d; drawRadar(state.pinned||d); highlight(); });
+  highlight(svg);
+}
+
+function highlight(svg){
+  const sel = svg || d3.select("#plot svg");
+  sel.selectAll(".dot").classed("dim", d => state.pinned && d!==state.pinned);
+}
+
+function pad([a,b]){ if(a===b) return [a-1,b+1]; const p=(b-a)*0.06; return [a-p,b+p]; }
+
+function showTip(e,d){
+  const rowsHtml = DATA.measures.map(m=>`<div class="row"><span>${pretty(m)}</span><span>${fmt(d[m])}</span></div>`).join("");
+  tip.html(`<b>${d.poet}</b><div class="row"><span>Year</span><span>${d.year}</span></div>`+
+           (d.n?`<div class="row"><span>Poems</span><span>${d.n}</span></div>`:"")+rowsHtml)
+     .style("left",(e.clientX+14)+"px").style("top",(e.clientY+14)+"px").style("opacity",1);
+}
+function hideTip(){ tip.style("opacity",0); }
+function fmt(v){ return (Math.abs(v)>=10) ? v.toFixed(0) : v.toFixed(3); }
+
+function drawLegend(){
+  const W = Math.max(320, document.getElementById("plot").clientWidth), H=44, bw=Math.min(260,W-120);
+  const yrs = color.domain();
+  d3.select("#legend").selectAll("svg").remove();
+  const svg = d3.select("#legend").append("svg").attr("viewBox",`0 0 ${W} ${H}`).attr("width","100%").attr("class","legend");
+  const defs = svg.append("defs"), grad = defs.append("linearGradient").attr("id","eraGrad");
+  d3.range(0,1.01,0.1).forEach(t=>grad.append("stop").attr("offset",(t*100)+"%").attr("stop-color",ERA_RAMP(t)));
+  svg.append("text").attr("x",0).attr("y",16).text("Era");
+  svg.append("rect").attr("x",34).attr("y",6).attr("width",bw).attr("height",12).attr("rx",2).attr("fill","url(#eraGrad)");
+  svg.append("text").attr("x",34).attr("y",34).text(yrs[0]);
+  svg.append("text").attr("x",34+bw).attr("y",34).attr("text-anchor","end").text(yrs[1]);
+}
+
+function drawRadar(a){
+  const S=320, cx=S/2, cy=S/2+6, R=S/2-58;
+  const ms = DATA.measures, N=ms.length;
+  const ang = i => (i/N)*2*Math.PI - Math.PI/2;
+  const pt = (i,rad)=>[cx+rad*Math.cos(ang(i)), cy+rad*Math.sin(ang(i))];
+
+  d3.select("#radar").selectAll("svg").remove();
+  const svg = d3.select("#radar").append("svg").attr("viewBox",`0 0 ${S} ${S}`).attr("width","100%");
+
+  // grid rings + spokes + labels
+  [0.25,0.5,0.75,1].forEach(g=>{
+    svg.append("polygon").attr("points", ms.map((_,i)=>pt(i,R*g).join(",")).join(" "))
+       .attr("fill","none").attr("stroke","#e2ddd0");
+  });
+  ms.forEach((mname,i)=>{
+    const o=pt(i,R);
+    svg.append("line").attr("x1",cx).attr("y1",cy).attr("x2",o[0]).attr("y2",o[1]).attr("stroke","#e2ddd0");
+    const l=pt(i,R+18);
+    svg.append("text").attr("class","rlabel").attr("x",l[0]).attr("y",l[1])
+       .attr("text-anchor", Math.abs(l[0]-cx)<6?"middle":(l[0]<cx?"end":"start"))
+       .attr("dy","0.32em").text(pretty(mname));
+  });
+
+  // corpus average (dotted)
+  const avg = {}; ms.forEach(m=> avg[m]=d3.mean(DATA.authors,d=>d[m]));
+  svg.append("polygon").attr("points", ms.map((m,i)=>pt(i,R*clamp01(norm[m](avg[m]))).join(",")).join(" "))
+     .attr("fill","none").attr("stroke","#9a9486").attr("stroke-dasharray","3 3").attr("stroke-width",1.5);
+
+  if(!a){
+    d3.select("#who").text("—"); d3.select("#whoMeta").text("Hover or click a point");
+    d3.select("#vals").html(""); return;
+  }
+  // author polygon
+  svg.append("polygon").attr("points", ms.map((m,i)=>pt(i,R*clamp01(norm[m](a[m]))).join(",")).join(" "))
+     .attr("fill","rgba(179,137,47,0.22)").attr("stroke","#2f4858").attr("stroke-width",2);
+  ms.forEach((m,i)=>{ const p=pt(i,R*clamp01(norm[m](a[m])));
+     svg.append("circle").attr("cx",p[0]).attr("cy",p[1]).attr("r",3).attr("fill","#2f4858"); });
+
+  d3.select("#who").text(a.poet);
+  d3.select("#whoMeta").text(`${a.year}${a.n?`  ·  ${a.n} poems`:""}${state.pinned===a?"  ·  pinned":""}`);
+  d3.select("#vals").html(ms.map(m=>`<li><span>${pretty(m)}</span><span>${fmt(a[m])}</span></li>`).join(""));
+}
+function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+
+// load a file the user picks (atlas.json or atlas_data.js)
+d3.select("#file").on("change", function(){
+  const f=this.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload = () => {
+    try{
+      const t=reader.result.trim();
+      let d = t.startsWith("window.ATLAS")
+        ? (new Function(t+"; return window.ATLAS;"))() : JSON.parse(t);
+      if(!d.authors||!d.authors.length) throw new Error("no authors in file");
+      DATA=d; state.pinned=null; setup();
+    }catch(err){ alert("Could not read that file: "+err.message); }
+  };
+  reader.readAsText(f);
+});
+
+window.addEventListener("resize", ()=>{ drawScatter(); drawLegend(); });
+setup();
+</script>
+</body>
+</html>
