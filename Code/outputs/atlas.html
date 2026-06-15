@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Poet Atlas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="atlas_data.js" onerror="void 0"></script>
+<style>
+  :root{
+    --paper:#f4f2ec; --panel:#fbfaf6; --ink:#20242e; --soft:#6b6f7a;
+    --line:#ddd8cc; --blue:#2f4858; --gilt:#b3892f;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+       -webkit-font-smoothing:antialiased;line-height:1.4}
+  header{padding:26px 30px 14px}
+  h1{font-family:var(--serif);font-weight:600;font-size:30px;margin:0}
+  .sub{color:var(--soft);font-size:14px;margin-top:4px;max-width:64ch}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--soft);margin-top:8px}
+  .byline{font-size:13px;color:var(--soft);margin-top:8px}
+  .byline strong{color:var(--ink);font-weight:600;font-family:var(--serif)}
+  .byline a{color:var(--blue);text-decoration:none;border-bottom:1px solid #cdd6da}
+  .byline a:hover{border-bottom-color:var(--blue)}
+  .badge{display:none;background:var(--gilt);color:#fff;border-radius:3px;
+         padding:2px 7px;font-size:11px;font-weight:600;margin-left:8px}
+  .controls{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;
+            padding:6px 30px 18px;border-bottom:1px solid var(--line)}
+  .ctl{display:flex;flex-direction:column;gap:4px}
+  .ctl label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
+  input[type=text]{font-family:var(--sans);font-size:14px;padding:7px 10px;border:1px solid var(--line);
+          background:var(--panel);border-radius:5px;color:var(--ink);min-width:240px}
+  input[type=text]:focus{outline:2px solid var(--blue);outline-offset:0}
+  .count{font-family:var(--mono);font-size:12px;color:var(--soft)}
+  main{display:grid;grid-template-columns:1fr 372px;gap:22px;padding:22px 30px 36px}
+  @media (max-width:880px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .card h2{font-family:var(--serif);font-size:16px;font-weight:600;margin:2px 0 8px}
+  .card .lede{color:var(--soft);font-size:12.5px;margin:0 0 6px}
+  svg{width:100%;height:auto;display:block}
+  .strip-label{fill:var(--ink);font-family:var(--sans);font-size:13px;font-weight:600}
+  .strip-axis path,.strip-axis line{stroke:#d2ccbd}
+  .strip-axis text{fill:var(--soft);font-family:var(--mono);font-size:10px}
+  .swarm-dot{cursor:pointer}
+  .median{stroke:#ccc5b4;stroke-dasharray:2 3}
+  .legend text{fill:var(--soft);font-family:var(--mono);font-size:10px}
+  .tip{position:fixed;pointer-events:none;background:var(--ink);color:#f4f2ec;border-radius:6px;
+       padding:8px 10px;font-size:12px;opacity:0;transition:opacity .08s;z-index:9;max-width:240px}
+  .tip b{font-family:var(--serif);font-weight:600}
+  .tip .row{font-family:var(--mono);font-size:11px;color:#cdd2c9;display:flex;justify-content:space-between;gap:14px}
+  .who{font-family:var(--serif);font-size:18px;margin:0}
+  .whometa{font-family:var(--mono);font-size:11px;color:var(--soft);margin:2px 0 8px}
+  .vals{list-style:none;padding:0;margin:8px 0 0}
+  .vals li{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;
+           padding:3px 0;border-bottom:1px dotted var(--line)}
+  .vals li span:last-child{color:var(--blue)}
+  .hint{color:var(--soft);font-size:12.5px;font-style:italic}
+  .rlabel{font-family:var(--sans);font-size:11px;fill:var(--ink)}
+  .strip-label{cursor:help}
+
+  /* measures explainer */
+  .col-left{display:flex;flex-direction:column;gap:22px;min-width:0}
+  .collap{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}
+  .caret{color:var(--soft);font-size:13px}
+  .about .item{padding:9px 0;border-bottom:1px dotted var(--line)}
+  .about .item:last-child{border-bottom:none}
+  .about .term{font-family:var(--serif);font-size:14.5px;font-weight:600}
+  .about .mean{font-size:13px;margin-top:2px}
+  .about .measure{font-family:var(--mono);font-size:11.5px;color:var(--soft);margin-top:3px;line-height:1.5}
+  .about .measure b{color:var(--blue);font-weight:600}
+
+  /* tabs + compare panel */
+  .tabs{display:flex;gap:4px;padding:12px 30px 0}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;padding:8px 8px;
+       font-family:var(--sans);font-size:14px;color:var(--soft);cursor:pointer}
+  .tab.active{color:var(--ink);border-bottom-color:var(--gilt);font-weight:600}
+  #panelCompare{padding:22px 30px 40px}
+  .compare{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+  textarea#poemIn{width:100%;min-height:190px;resize:vertical;font-family:var(--serif);
+       font-size:15px;line-height:1.55;padding:12px 14px;border:1px solid var(--line);
+       border-radius:6px;background:#fff;color:var(--ink)}
+  .comprow{display:flex;align-items:center;gap:12px;margin-top:10px}
+  .dbtn.primary{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:600}
+  .dbtn.primary:hover{background:#26404f}
+  .cmp-row{border-bottom:1px solid var(--line);padding:9px 2px;cursor:pointer;display:flex;gap:10px;align-items:baseline}
+  .cmp-row:hover{background:#f1ece1}
+  .cmp-sim{font-family:var(--mono);font-size:12px;color:var(--gilt);font-weight:600;min-width:44px}
+  .cmp-main{flex:1;min-width:0}
+  .cmp-poet{font-family:var(--serif);font-size:14.5px}
+  .cmp-meta{font-family:var(--mono);font-size:10.5px;color:var(--soft);margin-top:1px}
+  .cmp-snip{font-size:13px;color:var(--ink);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cmp-cap{color:var(--soft);font-size:12px;font-style:italic;margin:2px 0 8px}
+  .cmp-bar-row{display:flex;align-items:center;gap:10px;padding:7px 4px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .cmp-bar-row:hover{background:#f1ece1}
+  .cmp-bar-row.top{background:#faf4e6;border-left:3px solid var(--gilt);padding-left:6px}
+  .cmp-label{width:160px;min-width:160px;overflow:hidden}
+  .cmp-label .p{font-family:var(--serif);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cmp-label .m{font-family:var(--mono);font-size:10px;color:var(--soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cmp-track{flex:1;height:14px;background:#ece7da;border-radius:7px;overflow:hidden}
+  .cmp-fill{height:100%;border-radius:7px;min-width:3px}
+  .cmp-pct{font-family:var(--mono);font-size:11px;color:var(--ink);min-width:36px;text-align:right}
+
+  /* slide-in poem drawer */
+  .scrim{position:fixed;inset:0;background:rgba(20,24,30,.18);opacity:0;pointer-events:none;
+         transition:opacity .26s;z-index:25}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(440px,92vw);background:var(--panel);
+          border-left:1px solid var(--line);box-shadow:-14px 0 34px rgba(20,24,30,.12);
+          transform:translateX(100%);transition:transform .26s ease;z-index:30;display:flex;flex-direction:column}
+  .drawer.open{transform:none}
+  .drawer-head{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .drawer-title{flex:1;font-family:var(--serif);font-size:17px;font-weight:600;text-align:center;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dbtn{background:none;border:1px solid var(--line);border-radius:5px;padding:5px 10px;cursor:pointer;
+        font-size:13px;color:var(--ink);font-family:var(--sans);white-space:nowrap}
+  .dbtn:hover{background:#f1ece1}
+  .drawer-sub{padding:9px 16px 0;font-family:var(--mono);font-size:11px;color:var(--soft)}
+  .drawer-body{padding:6px 16px 22px;overflow:auto;flex:1}
+  .poem{border-bottom:1px solid var(--line);padding:10px 2px;cursor:pointer}
+  .poem:hover{background:#f1ece1}
+  .poem-meta{font-family:var(--mono);font-size:10.5px;color:var(--soft)}
+  .poem-snip{font-size:14px;margin-top:3px;color:var(--ink);font-family:var(--serif)}
+  .poem-head{font-family:var(--mono);font-size:11px;color:var(--soft);margin-bottom:3px}
+  .poem-vals{font-family:var(--mono);font-size:11px;color:var(--blue);margin-bottom:16px}
+  .poem-body{font-family:var(--serif);font-size:15.5px;line-height:1.5}
+  .pgap{height:.85em}
+  .empty{color:var(--soft);font-size:13px;font-style:italic;margin-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>The Poet Atlas <span class="badge" id="badge">sample data</span></h1>
+  <div class="sub">Every author placed on each of the five aspects of their verse. Search a poet to light
+    them up across all the strips, then click to open their poems.</div>
+  <div class="meta" id="meta"></div>
+  <div class="byline">By <strong>Samyukta Twarakavi</strong> &nbsp;·&nbsp;
+    <a href="https://www.linkedin.com/in/samyukta-twarakavi-9668253a0/" target="_blank" rel="noopener">LinkedIn</a> &nbsp;·&nbsp;
+    <a href="https://github.com/SamyuktaTwarakavi" target="_blank" rel="noopener">GitHub</a> &nbsp;·&nbsp;
+    <a href="https://allpoetry.com/Samyukta_Twarakavi" target="_blank" rel="noopener">AllPoetry</a>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" id="tabAtlas" type="button">The Atlas</button>
+  <button class="tab" id="tabCompare" type="button">Compare a poem</button>
+</div>
+
+<div id="panelAtlas">
+<div class="controls">
+  <div class="ctl"><label for="search">Find a poet</label>
+    <input type="text" id="search" placeholder="type a name, e.g. Keats" autocomplete="off"></div>
+  <div class="ctl"><label>&nbsp;</label><span class="count" id="count"></span></div>
+</div>
+
+<main>
+  <div class="col-left">
+    <div class="card">
+      <h2>Where each poet sits on every aspect</h2>
+      <p class="lede">One dot per author, placed by its value and nudged vertically so they don't pile up; colour is era. Click a dot to open that poet's poems. Hover a strip's name for what it measures.</p>
+      <div id="strips"></div>
+      <div id="legend"></div>
+    </div>
+    <div class="card">
+      <h2 class="collap" id="aboutHead"><span>What each strip measures</span><span class="caret" id="aboutCaret">▾</span></h2>
+      <div class="about" id="aboutBody"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Poet fingerprint</h2>
+    <p class="who" id="who">—</p>
+    <div class="whometa" id="whoMeta">Hover or search a poet</div>
+    <div id="radar"></div>
+    <ul class="vals" id="vals"></ul>
+    <p class="hint">The dotted shape is the corpus average. Each spoke is scaled to that aspect's range.</p>
+  </div>
+</main>
+</div><!-- /panelAtlas -->
+
+<section id="panelCompare" style="display:none">
+  <div class="compare">
+    <div class="card">
+      <h2>Compare a poem to the corpus</h2>
+      <p class="lede">Paste a poem; the page ranks the corpus poems that share the most distinctive vocabulary with it (common words count for less), and the poets behind them. Click any result to read it.</p>
+      <textarea id="poemIn" placeholder="Paste a poem here…"></textarea>
+      <div class="comprow">
+        <button class="dbtn primary" id="cmpBtn" type="button">Find closest poems</button>
+        <span class="count" id="cmpStatus"></span>
+      </div>
+    </div>
+    <div class="card" id="cmpResultsCard" style="display:none">
+      <h2>Closest poems</h2>
+      <p class="cmp-cap">Bar length = similarity, relative to the top match · colour marks the era · click to read.</p>
+      <div id="cmpPoems"></div>
+      <h2 style="margin-top:18px">Closest poets</h2>
+      <p class="cmp-cap">Ranked by each poet's single closest poem · click to open their poems.</p>
+      <div id="cmpAuthors"></div>
+    </div>
+  </div>
+</section>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <button class="dbtn" id="dBack" style="visibility:hidden">‹ Back</button>
+    <div class="drawer-title" id="dTitle">Poems</div>
+    <button class="dbtn" id="dClose">✕</button>
+  </div>
+  <div class="drawer-sub" id="dSub"></div>
+  <div class="drawer-body" id="dList"></div>
+  <div class="drawer-body" id="dPoem" style="display:none"></div>
+</aside>
+
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+const PRETTY = {year:"Year", nature:"Nature", sacred:"Sacred", industrial:"Industrial",
+                concreteness:"Concreteness", valence:"Valence", arousal:"Arousal",
+                dominance:"Dominance", visual:"Visual imagery", auditory:"Sound imagery",
+                joy:"Joy", sadness:"Sadness", fear:"Fear"};
+const pretty = k => PRETTY[k] || k;
+const ERA_RAMP = d3.interpolateRgbBasis(["#2b3a67","#3f8f8a","#c79a3e"]);
+const val = (d,v) => v === "year" ? d.year : d[v];
+
+function makeSample(){
+  let s = 7;
+  const rnd = () => (s = (s*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), up=t=>Math.max(0,t);
+  const POOL=["the moon over still water","a grief too cold for tears","iron wheels in the grey town",
+              "and the rose remembers summer","light falls on the quiet field","my soul is a small bright stone",
+              "rivers carry the year away","heaven leans low at evening","frost upon the window glass",
+              "we dreamed of gold and wind"];
+  const fakePoem=()=>{ const lines=3+Math.floor(rnd()*4), out=[];
+    for(let l=0;l<lines;l++){ out.push(POOL[Math.floor(rnd()*POOL.length)]); if(rnd()<0.18) out.push(""); }
+    return out.join("\n"); };
+  const authors=[];
+  const MS=["nature","sacred","industrial","concreteness","valence","arousal","dominance","visual","auditory","joy","sadness"];
+  for(let i=0;i<70;i++){
+    const year=1588+Math.floor(rnd()*338), t=(year-1588)/338, z=()=>(rnd()-0.5);
+    const base={nature:clamp(0.30+0.9*up(t-0.45)+0.12*z(),0,1.6),
+                sacred:clamp(0.70-0.55*up(t-0.55)+0.12*z(),0,1.3),
+                industrial:clamp(0.02+0.12*up(t-0.70)+0.02*z(),0,0.22),
+                concreteness:clamp(2.50+0.18*t+0.04*z(),2.3,2.86),
+                valence:clamp(0.595-0.02*up(t-0.85)+0.008*z(),0.55,0.63),
+                arousal:clamp(0.40+0.10*t+0.03*z(),0.2,0.7),
+                dominance:clamp(0.52+0.04*z(),0.35,0.68),
+                visual:clamp(2.6+0.5*t+0.10*z(),2.0,3.6),
+                auditory:clamp(1.7-0.3*up(t-0.5)+0.10*z(),1.0,2.4),
+                joy:clamp(0.9-0.4*up(t-0.6)+0.15*z(),0,1.6),
+                sadness:clamp(0.7+0.5*up(t-0.55)+0.15*z(),0,1.8)};
+    const np=4+Math.floor(rnd()*8), pl=[];
+    for(let k=0;k<np;k++){
+      const p={year:year+Math.floor(z()*8), era:`${Math.floor(year/25)*25}-${Math.floor(year/25)*25+24}`, text:fakePoem()};
+      for(const m of MS) p[m]=Math.round((base[m]+z()*0.1)*1000)/1000;
+      pl.push(p);
+    }
+    authors.push(Object.assign({poet:"Sample poet "+(i+1), year, n:np, poems:pl}, base));
+  }
+  authors.sort((a,b)=>a.year-b.year);
+  return {measures:MS,
+          authors, scoring:{concreteness:"sample",valence:"sample"}, sample:true};
+}
+
+let DATA = (window.ATLAS && window.ATLAS.authors && window.ATLAS.authors.length) ? window.ATLAS : makeSample();
+let color, norm = {};
+let hoverA = null, stickyA = null, query = "";
+let ABOUT = {};
+const tip = d3.select("#tip");
+
+function setup(){
+  color = d3.scaleSequential(ERA_RAMP).domain(d3.extent(DATA.authors, d=>d.year));
+  norm = {};
+  for(const m of DATA.measures){
+    const e = d3.extent(DATA.authors, d=>d[m]);
+    norm[m] = v => (e[1]>e[0]) ? (v-e[0])/(e[1]-e[0]) : 0.5;
+  }
+  ABOUT = buildAbout();
+  d3.select("#badge").style("display", DATA.sample ? "inline-block" : "none");
+  const sc = DATA.scoring || {};
+  d3.select("#meta").text(`${DATA.authors.length} authors · concreteness: ${sc.concreteness||"?"} · valence: ${sc.valence||"?"}`
+    + (DATA.sample ? "  —  run export_viz.py and load atlas_data.js for your poets" : ""));
+  d3.select("#search").on("input", function(){
+    query = this.value;
+    const ms = matchSet();
+    if(ms && ms.size){
+      stickyA = [...ms].sort((a,b)=>a.poet.length-b.poet.length)[0];
+      if(ms.size === 1) openDrawer(stickyA);
+    }
+    restyle(); drawRadar(focusA()); updateCount();
+  });
+  d3.select("#dBack").on("click", showList);
+  d3.select("#dClose").on("click", closeDrawer);
+  d3.select("#scrim").on("click", closeDrawer);
+  document.addEventListener("keydown", e => { if(e.key === "Escape") closeDrawer(); });
+  d3.select("#aboutHead").on("click", () => {
+    const b = document.getElementById("aboutBody");
+    const open = b.style.display !== "none";
+    b.style.display = open ? "none" : "block";
+    d3.select("#aboutCaret").text(open ? "▸" : "▾");
+  });
+  d3.select("#tabAtlas").on("click", () => showTab("atlas"));
+  d3.select("#tabCompare").on("click", () => showTab("compare"));
+  d3.select("#cmpBtn").on("click", runCompare);
+  renderAbout();
+  updateCount();
+  drawStrips(); drawLegend(); drawRadar(null);
+}
+
+function matchSet(){
+  const q = query.trim().toLowerCase();
+  if(!q) return null;
+  const s = new Set(DATA.authors.filter(a => a.poet.toLowerCase().includes(q)));
+  return s.size ? s : null;
+}
+function focusA(){ return hoverA || stickyA; }
+function jitter(i){ const x = Math.sin(i*97.13)*43758.5453; return (x-Math.floor(x))*2-1; }
+function padExt(e){ const a=e[0], b=e[1]; if(a===b) return [a-1,b+1]; const p=(b-a)*0.04; return [a-p,b+p]; }
+function fmt(v){ return (Math.abs(v)>=10) ? v.toFixed(0) : v.toFixed(3); }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function brightFill(d){ const c=d3.color(color(d.year)); return c ? c.brighter(0.9).formatHex() : color(d.year); }
+
+function updateCount(){
+  const ms = matchSet();
+  d3.select("#count").text(ms ? `${ms.size} match${ms.size===1?"":"es"}` : `${DATA.authors.length} authors`);
+}
+
+function buildAbout(){
+  const sc = DATA.scoring || {};
+  const lex = s => s && /lexicon/i.test(s);
+  const concMeasure = lex(sc.concreteness)
+    ? "Average Brysbaert concreteness rating of the poem's words — about 1 (abstract) to 5 (concrete)."
+    : "Concrete words vs abstract words: (concrete − abstract) ÷ (concrete + abstract), from −1 to +1.";
+  const valMeasure = lex(sc.valence)
+    ? "Average NRC-VAD valence of the poem's words — 0 (negative) to 1 (positive)."
+    : "Positive words vs negative words: (positive − negative) ÷ (positive + negative), from −1 to +1.";
+  return {
+    year:{mean:"When the poet was active — used to sort poems into 25-year eras.",
+          measure:"The author's approximate year (PoeTree dates by birth + 35; PoetryDB by a name→year table). It dates the poet, not each poem's exact composition."},
+    nature:{mean:"How much the poem dwells on the natural world — sky, sea, flowers, birds, seasons.",
+            measure:"Nature words per 100 words: the share of the poem's words that appear in a hand-built nature list."},
+    sacred:{mean:"How religious or spiritual the language is — God, soul, heaven, prayer, sin.",
+            measure:"Religious words per 100 words: the share of the poem's words that appear in a hand-built sacred list."},
+    industrial:{mean:"How much machinery and industry appear — engine, iron, factory, steam, wheel.",
+                measure:"Industrial words per 100 words: the share of the poem's words that appear in a hand-built industrial list."},
+    concreteness:{mean:"Whether the words are physical and sensory or abstract and conceptual.",
+                  measure:concMeasure},
+    valence:{mean:"The emotional tone of the words, from gloomy to bright.",
+             measure:valMeasure},
+    arousal:{mean:"The energy or intensity of the words, from calm to highly stirred-up.",
+             measure:"Average NRC-VAD arousal of the poem's words — 0 (calm) to 1 (intense)."},
+    dominance:{mean:"How much the words convey power and control versus weakness.",
+               measure:"Average NRC-VAD dominance of the poem's words — 0 (weak/controlled) to 1 (powerful/in control)."},
+    visual:{mean:"How strongly the words evoke sight and visual imagery.",
+            measure:"Average Lancaster Sensorimotor 'visual' strength of the poem's words — 0 (not visual) to 5 (strongly visual)."},
+    auditory:{mean:"How strongly the words evoke sound and hearing.",
+              measure:"Average Lancaster Sensorimotor 'auditory' strength of the poem's words — 0 (not auditory) to 5 (strongly auditory)."},
+    joy:{mean:"How much the explicit language of joy appears.",
+         measure:"Words tagged 'joy' in the NRC Emotion Lexicon, per 100 words."},
+    sadness:{mean:"How much the explicit language of sadness and loss appears.",
+             measure:"Words tagged 'sadness' in the NRC Emotion Lexicon, per 100 words."},
+    fear:{mean:"How much the explicit language of fear and dread appears.",
+          measure:"Words tagged 'fear' in the NRC Emotion Lexicon, per 100 words."},
+  };
+}
+function renderAbout(){
+  const host = document.getElementById("aboutBody");
+  const order = ["year", ...DATA.measures];
+  host.innerHTML = order.map(v => {
+    const a = ABOUT[v]; if(!a) return "";
+    return `<div class="item"><div class="term">${pretty(v)}</div>`
+         + `<div class="mean">${a.mean}</div>`
+         + `<div class="measure"><b>Measure:</b> ${a.measure}</div></div>`;
+  }).join("");
+}
+function aboutText(v){ const a = ABOUT[v]; return a ? `${a.mean}  —  Measure: ${a.measure}` : pretty(v); }
+
+function drawStrips(){
+  const host = document.getElementById("strips");
+  const W = Math.max(360, host.clientWidth);
+  const vars = ["year", ...DATA.measures];
+  const m = {left:108, right:26};
+  const top=8, rowH=74, band=30, axisGap=20;
+  const H = top + vars.length*rowH;
+  const sx = {};
+  vars.forEach(v => { sx[v] = d3.scaleLinear().domain(padExt(d3.extent(DATA.authors, d=>val(d,v))))
+                                  .range([m.left, W-m.right]).nice(); });
+
+  let svg = d3.select("#strips").selectAll("svg").data([0]).join("svg")
+              .attr("viewBox",`0 0 ${W} ${H}`).attr("width","100%");
+  svg.selectAll("*").remove();
+
+  vars.forEach((v, gi) => {
+    const y0 = top + gi*rowH, cy = y0 + band/2, axisY = y0 + band + axisGap;
+    svg.append("text").attr("class","strip-label").attr("x",0).attr("y",cy).attr("dy","0.32em").text(pretty(v))
+       .append("title").text(aboutText(v));
+    const med = d3.median(DATA.authors, d=>val(d,v));
+    svg.append("line").attr("class","median").attr("x1",sx[v](med)).attr("x2",sx[v](med))
+       .attr("y1",y0-1).attr("y2",y0+band+1);
+    svg.append("g").attr("class","strip-axis").attr("transform",`translate(0,${axisY})`)
+       .call(d3.axisBottom(sx[v]).ticks(6).tickSize(3));
+    svg.append("g").attr("data-strip",v).selectAll("circle").data(DATA.authors).join("circle")
+       .attr("class","swarm-dot")
+       .attr("cx", d => sx[v](val(d,v)))
+       .attr("cy", (d,i) => cy + jitter(i)*(band/2-2))
+       .attr("r",3).attr("fill", d=>color(d.year)).attr("opacity",0.5)
+       .attr("stroke","#fff").attr("stroke-width",0.5)
+       .on("pointermove",(e,d)=>showTip(e,d))
+       .on("pointerover",(e,d)=>{ hoverA=d; restyle(); drawRadar(focusA()); })
+       .on("pointerout",()=>{ hoverA=null; restyle(); drawRadar(focusA()); hideTip(); })
+       .on("click",(e,d)=>{ stickyA = (stickyA===d?null:d);
+          if(stickyA) openDrawer(stickyA); else closeDrawer();
+          restyle(); drawRadar(focusA()); });
+  });
+  restyle();
+}
+
+function restyle(){
+  const ms = matchSet(), f = focusA();
+  d3.select("#strips").selectAll(".swarm-dot")
+    .attr("opacity", d => (ms && !ms.has(d)) ? 0.05 : (d===f ? 1 : 0.5))
+    .attr("r", d => d===f ? 7 : 3)
+    .attr("fill", d => d===f ? brightFill(d) : color(d.year))
+    .attr("stroke", d => d===f ? "#b3892f" : "#fff")
+    .attr("stroke-width", d => d===f ? 2.5 : 0.5)
+    .filter(d => d===f).raise();
+}
+
+function showTip(e,d){
+  const rows = DATA.measures.map(m=>`<div class="row"><span>${pretty(m)}</span><span>${fmt(d[m])}</span></div>`).join("");
+  tip.html(`<b>${esc(d.poet)}</b><div class="row"><span>Year</span><span>${d.year}</span></div>`+
+           (d.n?`<div class="row"><span>Poems</span><span>${d.n}</span></div>`:"")+rows)
+     .style("left",(e.clientX+14)+"px").style("top",(e.clientY+14)+"px").style("opacity",1);
+}
+function hideTip(){ tip.style("opacity",0); }
+
+/* ---- right-side poem drawer ---- */
+let currentA = null;
+
+function openDrawer(a){
+  currentA = a;
+  d3.select("#dTitle").text(a.poet);
+  buildList(a);
+  showList();
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("drawer").setAttribute("aria-hidden","false");
+  document.getElementById("scrim").classList.add("show");
+}
+function closeDrawer(){
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("drawer").setAttribute("aria-hidden","true");
+  document.getElementById("scrim").classList.remove("show");
+}
+function showList(){
+  d3.select("#dBack").style("visibility","hidden");
+  document.getElementById("dList").style.display = "block";
+  document.getElementById("dPoem").style.display = "none";
+  if(currentA) d3.select("#dTitle").text(currentA.poet);
+}
+function buildList(a){
+  const list = document.getElementById("dList");
+  list.innerHTML = "";
+  if(!a.poems || !a.poems.length){
+    d3.select("#dSub").text("");
+    list.innerHTML = '<p class="empty">No poems in the data file for this poet. Re-run export_viz.py (with the latest code) to include each poet\'s poems.</p>';
+    return;
+  }
+  d3.select("#dSub").text(`${a.poems.length} poems, oldest first — click one to read it`);
+  a.poems.forEach((p,i) => {
+    const div = document.createElement("div");
+    div.className = "poem";
+    const first = (p.text.split("\n").find(l => l.trim()) || p.text).trim();
+    const words = first.split(/\s+/);
+    const snip = words.slice(0,9).join(" ") + (words.length>9 ? "…" : "");
+    div.innerHTML = `<div class="poem-meta">${p.year} · ${p.era}</div><div class="poem-snip">${esc(snip)}</div>`;
+    div.addEventListener("click", () => showPoem(p, i, a.poems.length));
+    list.appendChild(div);
+  });
+}
+function renderPoemBody(text){
+  return text.split("\n").map(ln =>
+    ln.trim() === "" ? '<div class="pgap"></div>' : `<div>${esc(ln)}</div>`).join("");
+}
+function showPoem(p, idx, total){
+  const dp = document.getElementById("dPoem");
+  const vals = `N ${fmt(p.nature)} · S ${fmt(p.sacred)} · I ${fmt(p.industrial)} · C ${fmt(p.concreteness)} · V ${fmt(p.valence)}`;
+  dp.innerHTML = `<div class="poem-head">Poem ${idx+1} of ${total} · ${p.year} · ${p.era}</div>`
+               + `<div class="poem-vals">${vals}</div>`
+               + `<div class="poem-body">${renderPoemBody(p.text)}</div>`;
+  document.getElementById("dList").style.display = "none";
+  dp.style.display = "block";
+  dp.scrollTop = 0;
+  d3.select("#dBack").style("visibility","visible");
+  d3.select("#dTitle").text(`${currentA.poet} · poem ${idx+1}`);
+}
+
+function drawLegend(){
+  const W = Math.max(360, document.getElementById("strips").clientWidth), H=42, bw=Math.min(260,W-120);
+  const yrs = color.domain();
+  d3.select("#legend").selectAll("svg").remove();
+  const svg = d3.select("#legend").append("svg").attr("viewBox",`0 0 ${W} ${H}`).attr("class","legend");
+  const grad = svg.append("defs").append("linearGradient").attr("id","eraGrad");
+  d3.range(0,1.01,0.1).forEach(t=>grad.append("stop").attr("offset",(t*100)+"%").attr("stop-color",ERA_RAMP(t)));
+  svg.append("text").attr("x",0).attr("y",16).text("Era");
+  svg.append("rect").attr("x",34).attr("y",6).attr("width",bw).attr("height",11).attr("rx",2).attr("fill","url(#eraGrad)");
+  svg.append("text").attr("x",34).attr("y",32).text(yrs[0]);
+  svg.append("text").attr("x",34+bw).attr("y",32).attr("text-anchor","end").text(yrs[1]);
+}
+
+function drawRadar(a){
+  const S=320, cx=S/2, cy=S/2+6, R=S/2-58, ms=DATA.measures, N=ms.length;
+  const ang = i => (i/N)*2*Math.PI - Math.PI/2;
+  const pt = (i,rad) => [cx+rad*Math.cos(ang(i)), cy+rad*Math.sin(ang(i))];
+  const c01 = v => Math.max(0, Math.min(1, v));
+
+  d3.select("#radar").selectAll("svg").remove();
+  const svg = d3.select("#radar").append("svg").attr("viewBox",`0 0 ${S} ${S}`);
+  [0.25,0.5,0.75,1].forEach(g=>svg.append("polygon")
+     .attr("points", ms.map((_,i)=>pt(i,R*g).join(",")).join(" ")).attr("fill","none").attr("stroke","#e2ddd0"));
+  ms.forEach((mn,i)=>{
+    const o=pt(i,R);
+    svg.append("line").attr("x1",cx).attr("y1",cy).attr("x2",o[0]).attr("y2",o[1]).attr("stroke","#e2ddd0");
+    const l=pt(i,R+18);
+    svg.append("text").attr("class","rlabel").attr("x",l[0]).attr("y",l[1])
+       .attr("text-anchor", Math.abs(l[0]-cx)<6?"middle":(l[0]<cx?"end":"start")).attr("dy","0.32em").text(pretty(mn));
+  });
+  const avg={}; ms.forEach(m=>avg[m]=d3.mean(DATA.authors,d=>d[m]));
+  svg.append("polygon").attr("points", ms.map((m,i)=>pt(i,R*c01(norm[m](avg[m]))).join(",")).join(" "))
+     .attr("fill","none").attr("stroke","#9a9486").attr("stroke-dasharray","3 3").attr("stroke-width",1.5);
+  if(!a){
+    d3.select("#who").text("—"); d3.select("#whoMeta").text("Hover or search a poet"); d3.select("#vals").html("");
+    return;
+  }
+  svg.append("polygon").attr("points", ms.map((m,i)=>pt(i,R*c01(norm[m](a[m]))).join(",")).join(" "))
+     .attr("fill","rgba(179,137,47,0.22)").attr("stroke","#2f4858").attr("stroke-width",2);
+  ms.forEach((m,i)=>{ const p=pt(i,R*c01(norm[m](a[m])));
+     svg.append("circle").attr("cx",p[0]).attr("cy",p[1]).attr("r",3).attr("fill","#2f4858"); });
+  d3.select("#who").text(a.poet);
+  d3.select("#whoMeta").text(`${a.year}${a.n?`  ·  ${a.n} poems`:""}${stickyA===a?"  ·  selected":""}`);
+  d3.select("#vals").html(ms.map(m=>`<li><span>${pretty(m)}</span><span>${fmt(a[m])}</span></li>`).join(""));
+}
+
+/* ---- tabs ---- */
+function showTab(which){
+  const atlas = which === "atlas";
+  document.getElementById("panelAtlas").style.display = atlas ? "" : "none";
+  document.getElementById("panelCompare").style.display = atlas ? "none" : "";
+  d3.select("#tabAtlas").classed("active", atlas);
+  d3.select("#tabCompare").classed("active", !atlas);
+  if(atlas){ drawStrips(); drawLegend(); }
+}
+
+/* ---- compare a poem: TF-IDF cosine over the embedded poem texts ---- */
+const STOP = new Set(("the a an and or but if of to in on at by for with from as is are was were "
+  + "be been being this that these those it its he she his her they them their we us our you your "
+  + "i me my mine not no nor so than then too very can will shall would could should may might must "
+  + "do does did done have has had had o thou thy thee art doth ere upon into over under out up down "
+  + "all what when where which who whom how why there here now yet more most such own off again").split(/\s+/));
+function tokensOf(text){
+  const out = [];
+  for(const w of text.toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/))
+    if(w.length >= 3 && !STOP.has(w)) out.push(w);
+  return out;
+}
+let INDEX = null;
+function buildIndex(){
+  const flat = [];
+  DATA.authors.forEach(a => (a.poems || []).forEach(p => flat.push({poem:p, author:a})));
+  const N = flat.length;
+  const df = new Map(), sets = new Array(N);
+  for(let i=0;i<N;i++){
+    const s = new Set(tokensOf(flat[i].poem.text)); sets[i] = s;
+    for(const t of s) df.set(t, (df.get(t)||0) + 1);
+  }
+  const idf = new Map();
+  for(const [t,d] of df) idf.set(t, Math.log((N + 1) / (d + 0.5)));
+  const postings = new Map(), norm = new Float64Array(N);
+  for(let i=0;i<N;i++){
+    let s = 0;
+    for(const t of sets[i]){ const w = idf.get(t); s += w*w;
+      let arr = postings.get(t); if(!arr){ arr = []; postings.set(t, arr); } arr.push(i); }
+    norm[i] = Math.sqrt(s) || 1;
+  }
+  INDEX = {flat, N, idf, postings, norm};
+}
+function runCompare(){
+  const text = document.getElementById("poemIn").value.trim();
+  if(!text){ d3.select("#cmpStatus").text("Paste a poem first."); return; }
+  if(!INDEX){
+    d3.select("#cmpStatus").text("Indexing the corpus…");
+    setTimeout(() => {
+      buildIndex();
+      if(!INDEX.N){ d3.select("#cmpStatus").text("This data file has no poem texts to compare against — re-run export_viz.py."); return; }
+      doSearch(text);
+    }, 30);
+    return;
+  }
+  doSearch(text);
+}
+function doSearch(text){
+  const {flat, N, idf, postings, norm} = INDEX;
+  const qset = new Set(tokensOf(text));
+  if(!qset.size){ document.getElementById("cmpResultsCard").style.display = "none";
+    d3.select("#cmpStatus").text("No comparable words in that poem."); return; }
+  let qn = 0; for(const t of qset){ const w = idf.get(t); if(w) qn += w*w; } qn = Math.sqrt(qn) || 1;
+  const score = new Float64Array(N);
+  for(const t of qset){
+    const w = idf.get(t); if(!w) continue;
+    const arr = postings.get(t); if(!arr || arr.length > N * 0.5) continue;   // skip ultra-common terms
+    const w2 = w * w;
+    for(let k=0;k<arr.length;k++) score[arr[k]] += w2;
+  }
+  const rows = [];
+  for(let i=0;i<N;i++) if(score[i] > 0) rows.push([i, score[i] / (norm[i] * qn)]);
+  rows.sort((a,b) => b[1] - a[1]);
+  renderComparePoems(rows.slice(0, 12));
+  const best = new Map();
+  for(const [i,s] of rows){ const a = flat[i].author; let e = best.get(a);
+    if(!e){ e = {best:s, bi:i, count:0}; best.set(a, e); } e.count++; if(s > e.best){ e.best = s; e.bi = i; } }
+  renderCompareAuthors([...best.values()].sort((x,y) => y.best - x.best).slice(0, 10));
+  document.getElementById("cmpResultsCard").style.display = "block";
+  d3.select("#cmpStatus").text(`compared against ${N.toLocaleString()} poems`);
+}
+function openMatch(poem, author){
+  const idx = author.poems.indexOf(poem);
+  stickyA = author; restyle(); drawRadar(author);
+  openDrawer(author); showPoem(poem, idx < 0 ? 0 : idx, author.poems.length);
+}
+function renderComparePoems(top){
+  const host = document.getElementById("cmpPoems"); host.innerHTML = "";
+  if(!top.length){ host.innerHTML = '<p class="empty">No close matches found — the poem may share little vocabulary with the corpus.</p>'; return; }
+  const max = top[0][1] || 1;
+  top.forEach(([i, sim], r) => {
+    const {poem, author} = INDEX.flat[i];
+    const first = (poem.text.split("\n").find(l => l.trim()) || poem.text).trim();
+    const row = document.createElement("div");
+    row.className = "cmp-bar-row" + (r === 0 ? " top" : "");
+    row.title = first;
+    row.innerHTML =
+        `<div class="cmp-label"><div class="p">${esc(author.poet)}</div>`
+      + `<div class="m">${poem.year} · ${poem.era}</div></div>`
+      + `<div class="cmp-track"><div class="cmp-fill" style="width:${Math.max(4, sim/max*100).toFixed(1)}%;background:${color(poem.year)}"></div></div>`
+      + `<div class="cmp-pct">${(sim*100).toFixed(0)}%</div>`;
+    row.addEventListener("click", () => openMatch(poem, author));
+    host.appendChild(row);
+  });
+}
+function renderCompareAuthors(top){
+  const host = document.getElementById("cmpAuthors"); host.innerHTML = "";
+  if(!top.length){ host.innerHTML = '<p class="empty">—</p>'; return; }
+  const max = top[0].best || 1;
+  top.forEach((e, r) => {
+    const a = INDEX.flat[e.bi].author;
+    const row = document.createElement("div");
+    row.className = "cmp-bar-row" + (r === 0 ? " top" : "");
+    row.title = `${e.count} matching poem${e.count===1?"":"s"} · ${a.n} in corpus`;
+    row.innerHTML =
+        `<div class="cmp-label"><div class="p">${esc(a.poet)}</div>`
+      + `<div class="m">${a.year} · ${e.count} match${e.count===1?"":"es"}</div></div>`
+      + `<div class="cmp-track"><div class="cmp-fill" style="width:${Math.max(4, e.best/max*100).toFixed(1)}%;background:${color(a.year)}"></div></div>`
+      + `<div class="cmp-pct">${(e.best*100).toFixed(0)}%</div>`;
+    row.addEventListener("click", () => { stickyA = a; restyle(); drawRadar(a); openDrawer(a); });
+    host.appendChild(row);
+  });
+}
+
+window.addEventListener("resize", ()=>{ drawStrips(); drawLegend(); });
+setup();
+</script>
+</body>
+</html>

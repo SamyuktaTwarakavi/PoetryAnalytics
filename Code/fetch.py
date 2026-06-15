@@ -31,7 +31,7 @@ def line_text(body):
         return ""
     parts = [ln["text"] for ln in body
              if isinstance(ln, dict) and isinstance(ln.get("text"), str)]
-    return " ".join(parts).strip()
+    return "\n".join(parts).strip()
 
 
 def iter_poems(dump_dir):

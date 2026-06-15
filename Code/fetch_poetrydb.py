@@ -80,7 +80,7 @@ def main():
             if MAX_POEMS_PER_POET and kept >= MAX_POEMS_PER_POET:
                 break
             title_id = (match, poem.get("title", ""))
-            text = " ".join(poem.get("lines", [])).strip()
+            text = "\n".join(poem.get("lines", [])).strip()
             if title_id in seen or len(text.split()) < MIN_WORDS:
                 continue
             rows.append({"poet": match, "year": year, "text": text})

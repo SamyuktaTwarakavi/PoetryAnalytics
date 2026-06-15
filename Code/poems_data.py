@@ -16,12 +16,147 @@ CONCRETE = ["sea", "tree", "trees", "stone", "iron", "hand", "eye", "eyes", "clo
 ABSTRACT = ["truth", "soul", "beauty", "time", "immortal", "fate", "mind", "study",
             "struggle", "circumstance", "wonder", "vision", "future", "change",
             "sacrifice", "symmetry", "observation", "state", "glory"]
-NATURE = ["flower", "tree", "trees", "sky", "sea", "spring", "cloud", "bird", "river",
-          "leaf", "leaves", "rose", "sun", "moon", "fruit", "breeze"]
-INDUSTRIAL = ["iron", "engine", "steam", "smoke", "machine", "wheel", "grooves",
-              "city", "factory", "coal"]
-RELIGIOUS = ["god", "gods", "soul", "heaven", "sacred", "holy", "prayer", "sin",
-             "eternal", "divine", "hallowed", "blest", "immortal", "spirit"]
+# --- The three dimensions that have NO lexicon equivalent live or die by these
+# lists, so they are kept broad and balanced across sub-themes. Scoring matches
+# exact lowercased tokens (clean() splits on every non-letter), so singular AND
+# plural forms are listed, plus solid compounds like "moonlight"/"nightingale".
+# Words that double as common verbs (pine, swallow, crane, cross, train, fall)
+# are left out on purpose to keep the counts honest.
+
+NATURE = [
+    # flora -- general
+    "flower", "flowers", "blossom", "blossoms", "bloom", "blooms", "bud", "buds",
+    "petal", "petals", "leaf", "leaves", "branch", "branches", "bough", "boughs",
+    "twig", "twigs", "root", "roots", "vine", "vines", "fern", "ferns", "moss",
+    "grass", "reed", "reeds", "thorn", "thorns", "bramble", "brambles", "hedge",
+    "hedgerow", "meadow", "meadows", "field", "fields", "garden", "gardens",
+    "grove", "groves", "wood", "woods", "woodland", "forest", "forests", "orchard",
+    "thicket", "copse", "bower", "bowers", "dell", "glade", "glades", "glen",
+    "heath", "moor", "moorland", "fen", "marsh", "pasture", "pastures",
+    # trees
+    "tree", "trees", "oak", "oaks", "elm", "elms", "fir", "firs", "birch", "beech",
+    "willow", "willows", "yew", "cedar", "cypress", "poplar", "maple", "chestnut",
+    "sycamore", "hawthorn", "holly", "ivy", "laurel",
+    # flowers
+    "rose", "roses", "lily", "lilies", "daffodil", "daffodils", "violet", "violets",
+    "daisy", "daisies", "primrose", "primroses", "tulip", "tulips", "poppy",
+    "poppies", "bluebell", "bluebells", "lavender", "jasmine", "honeysuckle",
+    "marigold", "snowdrop", "snowdrops", "foxglove", "heather", "clover",
+    "buttercup", "buttercups", "cowslip", "cowslips", "dandelion", "dandelions",
+    # fruit / crops
+    "fruit", "fruits", "apple", "apples", "cherry", "cherries", "plum", "plums",
+    "grape", "grapes", "berry", "berries", "acorn", "acorns", "corn", "wheat",
+    "harvest", "seed", "seeds", "grain", "hay", "sheaf", "sheaves",
+    # birds
+    "bird", "birds", "lark", "larks", "nightingale", "nightingales", "sparrow",
+    "sparrows", "robin", "robins", "dove", "doves", "raven", "ravens", "crow",
+    "crows", "owl", "owls", "eagle", "eagles", "hawk", "hawks", "swan", "swans",
+    "thrush", "finch", "wren", "cuckoo", "blackbird", "starling", "gull", "gulls",
+    "heron", "falcon", "wing", "wings", "feather", "feathers", "plume", "plumes",
+    "nest", "nests",
+    # animals
+    "deer", "hare", "hares", "fox", "foxes", "wolf", "wolves", "lamb", "lambs",
+    "sheep", "ewe", "ewes", "herd", "herds", "flock", "flocks", "cattle", "cow",
+    "cows", "ox", "oxen", "horse", "horses", "steed", "steeds", "colt", "foal",
+    "hound", "hounds", "stag", "stags", "doe", "fawn", "fawns", "rabbit", "rabbits",
+    "squirrel", "squirrels", "bee", "bees", "butterfly", "butterflies", "moth",
+    "moths", "beetle", "ant", "ants", "spider", "spiders", "worm", "worms", "snail",
+    "snails", "serpent", "serpents", "snake", "snakes", "adder", "viper", "frog",
+    "frogs", "toad", "toads", "fish", "trout", "salmon", "minnow", "whale",
+    "whales", "dolphin", "dolphins", "hoof", "hooves", "claw", "claws", "paw",
+    "paws", "fang", "fangs", "fleece",
+    # sky / weather / celestial
+    "sky", "skies", "cloud", "clouds", "sun", "suns", "moon", "moons", "star",
+    "stars", "starlight", "sunlight", "moonlight", "dawn", "dusk", "twilight",
+    "sunrise", "sunset", "rainbow", "rainbows", "lightning", "thunder", "storm",
+    "storms", "tempest", "tempests", "wind", "winds", "breeze", "breezes", "gale",
+    "gales", "zephyr", "zephyrs", "gust", "gusts", "rain", "rains", "shower",
+    "showers", "snow", "snows", "frost", "frosts", "hail", "mist", "mists", "fog",
+    "dew", "dews", "sleet",
+    # water / landscape
+    "sea", "seas", "ocean", "oceans", "river", "rivers", "stream", "streams",
+    "brook", "brooks", "lake", "lakes", "pond", "ponds", "pool", "pools",
+    "fountain", "fountains", "waterfall", "waterfalls", "cascade", "cascades",
+    "wave", "waves", "tide", "tides", "shore", "shores", "beach", "beaches",
+    "coast", "coasts", "cliff", "cliffs", "bay", "cove", "coves", "creek",
+    "creeks", "rill", "rills", "billow", "billows", "surf", "foam", "mountain",
+    "mountains", "hill", "hills", "valley", "valleys", "vale", "vales", "dale",
+    "dales", "peak", "peaks", "summit", "summits", "ridge", "ridges", "slope",
+    "slopes", "cave", "caves", "cavern", "caverns", "rock", "rocks", "stone",
+    "stones", "crag", "crags", "boulder", "boulders", "sand", "sands", "soil",
+    "earth", "ground", "dust", "isle", "isles", "island", "islands", "plains",
+    "desert", "deserts", "wilderness", "wilds",
+    # seasons / general
+    "spring", "summer", "autumn", "winter", "season", "seasons", "springtime",
+    "midsummer", "nature", "natural", "landscape", "countryside", "foliage",
+    "greenery", "verdant",
+]
+
+INDUSTRIAL = [
+    # machines and their parts
+    "machine", "machines", "machinery", "engine", "engines", "motor", "motors",
+    "mechanic", "mechanical", "mechanism", "gear", "gears", "cog", "cogs", "wheel",
+    "wheels", "piston", "pistons", "lever", "levers", "crank", "cranks", "valve",
+    "valves", "pulley", "pulleys", "axle", "axles", "rivet", "rivets", "spindle",
+    "spindles", "loom", "looms", "shuttle", "shuttles", "groove", "grooves",
+    "treadmill", "treadmills",
+    # power / steam / fuel
+    "steam", "coal", "smoke", "soot", "furnace", "furnaces", "boiler", "boilers",
+    "forge", "forges", "foundry", "foundries", "kiln", "kilns", "fuel", "cinder",
+    "cinders", "gas",
+    # metal / materials
+    "iron", "steel", "brass", "copper", "tin", "bronze", "metal", "metals", "ore",
+    "anvil", "anvils", "hammer", "hammers", "nail", "nails", "chain", "chains",
+    "wire", "wires", "girder", "girders", "rail", "rails", "railway", "railways",
+    "railroad", "railroads",
+    # factory / works
+    "factory", "factories", "mill", "mills", "workshop", "workshops", "warehouse",
+    "warehouses", "chimney", "chimneys", "smokestack", "smokestacks", "wharf",
+    "wharves", "dock", "docks", "industry", "industries", "industrial",
+    "manufacture", "manufactory",
+    # transport
+    "locomotive", "locomotives", "steamboat", "steamboats", "steamship",
+    "steamships", "steamer", "steamers", "funnel", "funnels", "propeller",
+    "propellers",
+    # the industrial city (the claim is "machines and cities")
+    "city", "cities", "street", "streets", "pavement", "gutter", "gutters", "slum",
+    "slums", "alley", "alleys", "brick", "bricks", "smog", "grime", "grimy",
+]
+
+RELIGIOUS = [
+    # the divine
+    "god", "gods", "goddess", "christ", "jesus", "jehovah", "almighty", "creator",
+    "maker", "savior", "saviour", "redeemer", "messiah", "providence", "deity",
+    "godhead", "trinity", "divine", "divinity",
+    # heaven / afterlife
+    "heaven", "heavens", "heavenly", "paradise", "eden", "hell", "hades",
+    "purgatory", "eternity", "eternal", "everlasting", "immortal", "immortality",
+    "resurrection", "salvation", "damnation", "judgment", "judgement",
+    # spirit / beings
+    "soul", "souls", "spirit", "spirits", "spiritual", "angel", "angels",
+    "angelic", "seraph", "seraphim", "cherub", "cherubim", "saint", "saints",
+    "saintly", "devil", "devils", "satan", "demon", "demons",
+    # worship / practice
+    "pray", "prays", "prayed", "praying", "prayer", "prayers", "worship",
+    "worshipped", "praise", "psalm", "psalms", "hymn", "hymns", "bless", "blessed",
+    "blest", "blessing", "blessings", "grace", "mercy", "faith", "faithful",
+    "creed", "gospel", "scripture", "scriptures", "bible", "sabbath", "communion",
+    "sacrament", "baptism", "confession", "repent", "repentance", "penance",
+    "pilgrimage", "pilgrim", "pilgrims", "devotion", "devout", "pious", "piety",
+    "reverence", "kneel",
+    # places / objects
+    "church", "churches", "chapel", "cathedral", "temple", "temples", "shrine",
+    "shrines", "altar", "altars", "sanctuary", "crucifix", "choir", "font",
+    "steeple", "incense", "relic", "relics", "ark", "tabernacle", "pulpit",
+    "cloister", "abbey", "monastery", "convent",
+    # sin / holiness
+    "sin", "sins", "sinful", "sinner", "sinners", "holy", "holiness", "hallowed",
+    "sacred", "sanctify", "righteous", "righteousness", "redemption", "atonement",
+    "forgiveness",
+    # scripture figures / places
+    "prophet", "prophets", "apostle", "apostles", "disciple", "disciples",
+    "martyr", "martyrs", "calvary", "zion", "gethsemane", "golgotha",
+]
 
 
 # Poet -> rough active year, used to date PoetryDB poems (which carry no date).

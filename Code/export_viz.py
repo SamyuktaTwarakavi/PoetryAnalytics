@@ -2,79 +2,76 @@
 Export data for the D3 "Poet Atlas" page (atlas.html).
 
 Scores every poem on the five measures (lexicon for concreteness/valence if the
-files are in data/lexicons/, otherwise word lists), aggregates to author level,
-and writes two files into outputs/:
+files are in data/lexicons/, otherwise word lists), groups poems under their
+author, and writes two files into outputs/:
     atlas_data.js   atlas.html loads this automatically when it sits beside it
-    atlas.json      same data, for the page's "load file" button
+    atlas.json      same data
+
+Each author carries their aggregate scores AND the list of their poems (each
+poem's five values plus its text), so the page can list a poet's poems and show
+any one of them.
 
 Run:  python export_viz.py
 """
 
 import json
 import os
-import random
 
 import config
 from corpus import poems
-from test_textbook import measure_poem
-from lexicons import load_concreteness, load_valence, poem_mean
+from poetryAnalytics import build_measures
 
-MEASURES = ["nature", "sacred", "industrial", "concreteness", "valence"]
 MIN_POEMS = 5          # drop authors with fewer poems (too noisy to profile)
-SAMPLE_POEMS = 1500    # cap the optional poem layer so the page stays snappy
+MAX_TEXT = 1500        # truncate a poem's displayed text to this many characters
 
 
 def main():
-    conc, val = load_concreteness(), load_valence()
+    order, scorers, scoring = build_measures()
+    print("scoring", len(order), "measures:", ", ".join(order))
 
-    def score(text, name):
-        if name == "concreteness" and conc:
-            return poem_mean(text, conc)
-        if name == "valence" and val:
-            return poem_mean(text, val)
-        return measure_poem(text, name)
-
-    scored = []
+    by_poet = {}
     for p in poems:
         if not p.get("year"):
             continue
-        row = {"poet": p["poet"], "year": p["year"], "era": p["era"]}
+        rec = {"year": p["year"], "era": p["era"]}
         ok = True
-        for m in MEASURES:
-            v = score(p["text"], m)
+        for m in order:
+            v = scorers[m](p["text"])
             if v is None:
                 ok = False
                 break
-            row[m] = round(v, 4)
-        if ok:
-            scored.append(row)
-
-    by_poet = {}
-    for r in scored:
-        by_poet.setdefault(r["poet"], []).append(r)
+            rec[m] = round(v, 4)
+        if not ok:
+            continue
+        text = p.get("raw") or p["text"]
+        rec["text"] = text[:MAX_TEXT] + ("…" if len(text) > MAX_TEXT else "")
+        by_poet.setdefault(p["poet"], []).append(rec)
 
     authors = []
-    for poet, rows in by_poet.items():
-        if len(rows) < MIN_POEMS:
+    for poet, plist in by_poet.items():
+        if len(plist) < MIN_POEMS:
             continue
-        a = {"poet": poet, "n": len(rows),
-             "year": round(sum(r["year"] for r in rows) / len(rows))}
-        for m in MEASURES:
-            a[m] = round(sum(r[m] for r in rows) / len(rows), 4)
+        plist.sort(key=lambda r: r["year"])
+        a = {"poet": poet, "n": len(plist),
+             "year": round(sum(r["year"] for r in plist) / len(plist))}
+        for m in order:
+            a[m] = round(sum(r[m] for r in plist) / len(plist), 4)
+        a["poems"] = plist
         authors.append(a)
     authors.sort(key=lambda a: a["year"])
 
-    random.seed(0)
-    poems_layer = random.sample(scored, min(SAMPLE_POEMS, len(scored)))
+    def short(label):
+        if "Brysbaert" in label:
+            return "Brysbaert lexicon"
+        if "NRC-VAD" in label:
+            return "NRC-VAD lexicon"
+        return "word list" if "word list" in label else label
 
     data = {
-        "measures": MEASURES,
+        "measures": order,
         "authors": authors,
-        "poems": poems_layer,
-        "scoring": {
-            "concreteness": "Brysbaert lexicon" if conc else "word list",
-            "valence": "NRC-VAD lexicon" if val else "word list",
-        },
+        "scoring": {"concreteness": short(scoring["concreteness"]),
+                    "valence": short(scoring["valence"])},
     }
 
     os.makedirs(config.OUTPUT_DIR, exist_ok=True)
@@ -85,11 +82,11 @@ def main():
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f)
 
-    print(f"wrote {len(authors)} authors and {len(poems_layer)} sampled poems")
+    total = sum(a["n"] for a in authors)
+    print(f"wrote {len(authors)} authors and {total} poems")
     print(f"  -> {js_path}")
     print(f"  -> {json_path}")
-    print("Put atlas.html next to atlas_data.js and open it, or use the page's "
-          "load button on atlas.json.")
+    print("Put atlas.html next to atlas_data.js and open it.")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,12 @@ def clean(text):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z\s]", " ", text.lower())).strip()
 
 
+def keep_lines(text):
+    """Tidy text for display while keeping its line breaks (so poems read as lines)."""
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in (text or "").splitlines()]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
 def era_of(year):
     start = (year // BIN_YEARS) * BIN_YEARS
     return f"{start}-{start + BIN_YEARS - 1}"
@@ -44,6 +50,7 @@ def load_csv(path):
                 "year": int(year) if year.isdigit() else None,
                 "era": era or era_of(int(year)),
                 "text": text,
+                "raw": keep_lines(r.get("text", "")),
             })
     return rows
 

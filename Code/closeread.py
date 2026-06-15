@@ -6,7 +6,7 @@ score, and the opening words) so you can check that the numbers match what is
 on the page. If the most-concrete poems really are full of physical images and
 the least are all abstractions, the measure means something.
 
-Uses the same scoring as test_textbook.py: the lexicons if they are in
+Uses the same scoring as poetryAnalytics.py: the lexicons if they are in
 data/lexicons/, otherwise the word lists.
 
 Run:  python closeread.py
@@ -17,12 +17,10 @@ import os
 
 import config
 from corpus import poems
-from test_textbook import measure_poem
-from lexicons import load_concreteness, load_valence, poem_mean
+from poetryAnalytics import build_measures
 
 TOP_N = 5
 MIN_WORDS = 40          # skip very short poems -- their rates swing wildly
-MEASURES = ["nature", "sacred", "industrial", "concreteness", "valence"]
 
 
 def snippet(text, n=24):
@@ -36,25 +34,11 @@ def line(score, p):
 
 
 def main():
-    conc_lex = load_concreteness()
-    val_lex = load_valence()
-    scoring = {
-        "nature": "word-list rate (% nature words)",
-        "sacred": "word-list rate (% religious words)",
-        "industrial": "word-list rate (% industrial words)",
-        "concreteness": "Brysbaert lexicon (mean)" if conc_lex else "word list (concrete - abstract)",
-        "valence": "NRC-VAD lexicon (mean)" if val_lex else "word list (positive - negative)",
-    }
-
-    def score(text, name):
-        if name == "concreteness" and conc_lex:
-            return poem_mean(text, conc_lex)
-        if name == "valence" and val_lex:
-            return poem_mean(text, val_lex)
-        return measure_poem(text, name)
+    order, scorers, scoring = build_measures()
 
     long_poems = [p for p in poems if len(p["text"].split()) >= MIN_WORDS]
     print(f"ranking {len(long_poems)} poems (>= {MIN_WORDS} words) of {len(poems)} total")
+    print("measures:", ", ".join(order))
 
     out = ["# Close reading: the poems at each extreme\n"]
     out.append(f"For each measure, the {TOP_N} highest- and lowest-scoring poems "
@@ -62,8 +46,8 @@ def main():
                f"lowercased version used for scoring -- look up the original to "
                f"read it properly.\n")
 
-    for m in MEASURES:
-        scored = [(score(p["text"], m), p) for p in long_poems]
+    for m in order:
+        scored = [(scorers[m](p["text"]), p) for p in long_poems]
         scored = [(s, p) for s, p in scored if s is not None]
         scored.sort(key=lambda sp: sp[0])
         low = scored[:TOP_N]
